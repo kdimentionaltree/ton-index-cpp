@@ -326,7 +326,7 @@ void DbScanner::alarm() {
   if (mode_ == dbs_readonly) {
     return;
   }
-  alarm_timestamp() = td::Timestamp::in(1.0);
+  alarm_timestamp() = td::Timestamp::in(catch_up_interval_);
   if (db_.empty()) {
     return;
   }

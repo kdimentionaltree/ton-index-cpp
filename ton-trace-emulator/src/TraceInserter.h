@@ -12,10 +12,8 @@ private:
     td::Promise<td::Unit> promise_;
 
 public:
-    inline static std::string redis_uri = "tcp://127.0.0.1:6379";
-
-    TraceInserter(std::unique_ptr<Trace> trace, td::Promise<td::Unit> promise) :
-        redis_(sw::redis::Redis(redis_uri)), trace_(std::move(trace)), promise_(std::move(promise)) {
+    TraceInserter(std::string redis_dsn, std::unique_ptr<Trace> trace, td::Promise<td::Unit> promise) :
+        redis_(sw::redis::Redis(redis_dsn)), trace_(std::move(trace)), promise_(std::move(promise)) {
     }
 
     void start_up() override;

@@ -43,6 +43,7 @@ private:
     td::Timestamp start_time_;
 
     // static map for matching in-out msgs between blocks to propagate trace ids. TODO: clean up old entries.
+    // TODO: care of thread safety
     inline static std::unordered_map<td::Bits256, TraceId, BitArrayHasher> interblock_trace_ids_;
 
     void parse_error(ton::BlockId blkid, td::Status error);

@@ -21,6 +21,7 @@ add_executable(ton-trace-emulator
     src/main.cpp
     src/TraceScheduler.cpp
     src/TraceInserter.cpp
+    src/RedisListener.cpp
 )
 target_include_directories(ton-trace-emulator
     PUBLIC external/ton

@@ -22,7 +22,13 @@ void OverlayListener::start_up() {
         }
         void receive_query(ton::adnl::AdnlNodeIdShort src, ton::overlay::OverlayIdShort overlay_id, td::BufferSlice data,
                         td::Promise<td::BufferSlice> promise) override {
-            promise.set_error(td::Status::Error("not implemented"));
+            auto B = ton::fetch_tl_object<ton::ton_api::tonNode_getCapabilities>(std::move(data), true);
+            if (B.is_error()) {
+                promise.set_error(td::Status::Error("not implemented"));
+                return;
+            }
+            
+            promise.set_value(ton::create_serialize_tl_object<ton::ton_api::tonNode_capabilities>(0, 0));
         }
         void receive_broadcast(ton::PublicKeyHash src, ton::overlay::OverlayIdShort overlay_id, td::BufferSlice data) override {
             auto B = ton::fetch_tl_object<ton::ton_api::tonNode_externalMessageBroadcast>(std::move(data), true);
@@ -83,10 +89,6 @@ void OverlayListener::start_up() {
 
     td::actor::send_closure(adnl_, &ton::adnl::Adnl::register_network_manager, adnl_network_manager_.get());
 
-    // TRY_RESULT_PREFIX_ASSIGN(adnl_static_nodes_, ton::adnl::AdnlNodesList::create(dht_config->nodes()),
-    //                        "bad static adnl nodes: ");
-    // td::actor::send_closure(adnl_, &ton::adnl::Adnl::add_static_nodes_from_config, std::move(adnl_static_nodes_));
-    
     ton::adnl::AdnlAddress x = ton::adnl::AdnlAddressImpl::create(
         ton::create_tl_object<ton::ton_api::adnl_address_udp>(addr.get_ipv4(), addr.get_port()));
     ton::adnl::AdnlAddressList addr_list;

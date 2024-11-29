@@ -34,7 +34,7 @@ private:
     std::shared_ptr<emulator::TransactionEmulator> emulator_;
     std::vector<td::Ref<vm::Cell>> shard_states_;
 
-    std::unordered_map<td::Bits256, std::reference_wrapper<const TransactionInfo>, BitArrayHasher> tx_by_in_msg_hash_;
+    std::unordered_map<td::Bits256, std::reference_wrapper<TransactionInfo>, BitArrayHasher> tx_by_in_msg_hash_;
 
     std::unordered_set<TraceId, BitArrayHasher> trace_ids_in_progress_;
 

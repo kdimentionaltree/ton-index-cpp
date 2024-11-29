@@ -230,6 +230,9 @@ td::Result<Message> parse_message(td::Ref<vm::Cell> msg_cell) {
     body = std::move(message.body);
     body.write().advance(1);
   } else {
+    if (message.body->size_refs() != 1) {
+      return td::Status::Error("Failed to read message body");
+    }
     body = vm::load_cell_slice_ref(message.body->prefetch_ref());
   }
   msg.body = vm::CellBuilder().append_cellslice(*body).finalize();
@@ -528,7 +531,7 @@ td::Result<Transaction> parse_tx(td::Ref<vm::Cell> root, ton::WorkchainId workch
 
   if (trans.r1.in_msg->prefetch_long(1)) {
     auto msg = trans.r1.in_msg->prefetch_ref();
-    TRY_RESULT_ASSIGN(schema_tx.in_msg, parse_message(trans.r1.in_msg->prefetch_ref()));
+    TRY_RESULT_ASSIGN(schema_tx.in_msg, parse_message(msg));
   }
 
   if (trans.outmsg_cnt != 0) {

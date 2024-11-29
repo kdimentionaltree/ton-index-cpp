@@ -152,7 +152,7 @@ void McBlockEmulator::process_txs() {
     });
 
     std::unordered_map<td::Bits256, TransactionInfo, BitArrayHasher> txs_by_out_msg_hash;
-    for (const auto& tx : txs_) {
+    for (auto& tx : txs_) {
         tx_by_in_msg_hash_.insert({tx.in_msg_hash, std::ref(tx)});
         for (const auto& out_msg : tx.out_msgs) {
             txs_by_out_msg_hash.insert({out_msg.hash, tx});
@@ -291,7 +291,11 @@ void McBlockEmulator::create_trace(const TransactionInfo& tx, td::Promise<Trace 
         }
 
         if (tx_by_in_msg_hash_.find(out_msg.hash) != tx_by_in_msg_hash_.end()) {
-            const TransactionInfo& child_tx = tx_by_in_msg_hash_.at(out_msg.hash);
+            TransactionInfo& child_tx = tx_by_in_msg_hash_.at(out_msg.hash);
+            if (!child_tx.initial_msg_hash) {
+                LOG(WARNING) << "No initial_msg_hash for child tx " << child_tx.hash.to_hex();
+                child_tx.initial_msg_hash = tx.initial_msg_hash;
+            }
             auto P = td::PromiseCreator::lambda([SelfId = actor_id(this), msg_hash = out_msg.hash, parent_trace = trace, child_ind, subpromise = ig.get_promise()](td::Result<Trace *> R) mutable {
                 if (R.is_error()) {
                     subpromise.set_error(R.move_as_error());

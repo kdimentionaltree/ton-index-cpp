@@ -3,8 +3,6 @@
 
 void TraceInserter::start_up() {
     try {
-        transaction_.redis().watch(trace_->id.to_hex());
-
         std::queue<std::reference_wrapper<Trace>> queue;
         std::unordered_map<block::StdAddress, typeof(trace_->interfaces), AddressHasher> addr_interfaces;
     

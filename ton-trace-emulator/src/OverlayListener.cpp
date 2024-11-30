@@ -158,6 +158,13 @@ void OverlayListener::trace_interfaces_error(TraceId trace_id, td::Status error)
 
 void OverlayListener::finish_processing(std::unique_ptr<Trace> trace) {
     LOG(INFO) << "Finished emulating trace " << trace->id.to_hex();
-    trace_processor_(std::move(trace));
+    auto P = td::PromiseCreator::lambda([trace_id = trace->id](td::Result<td::Unit> R) {
+        if (R.is_error()) {
+            LOG(ERROR) << "Failed to insert trace " << trace_id.to_hex() << ": " << R.move_as_error();
+            return;
+        }
+        LOG(DEBUG) << "Successfully inserted trace " << trace_id.to_hex();
+    });
+    trace_processor_(std::move(trace), std::move(P));
     traces_cnt_++;
 }

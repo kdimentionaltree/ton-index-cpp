@@ -14,7 +14,7 @@ class OverlayListener : public td::actor::Actor {
 private:
     std::string global_config_path_;
     std::string inet_addr_;
-    std::function<void(std::unique_ptr<Trace>)> trace_processor_;
+    std::function<void(std::unique_ptr<Trace>, td::Promise<td::Unit>)> trace_processor_;
 
     td::actor::ActorOwn<ton::overlay::Overlays> overlays_;
     td::actor::ActorOwn<ton::adnl::Adnl> adnl_;
@@ -36,7 +36,7 @@ private:
     void finish_processing(std::unique_ptr<Trace> trace);
 
 public:
-    OverlayListener(std::string global_config_path, std::string inet_addr, std::function<void(std::unique_ptr<Trace>)> trace_processor)
+    OverlayListener(std::string global_config_path, std::string inet_addr, std::function<void(std::unique_ptr<Trace>, td::Promise<td::Unit>)> trace_processor)
         : global_config_path_(std::move(global_config_path)), inet_addr_(std::move(inet_addr)), trace_processor_(std::move(trace_processor)) {};
 
     virtual void start_up() override;

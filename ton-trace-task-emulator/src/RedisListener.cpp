@@ -1,5 +1,13 @@
+#include <msgpack.hpp>
 #include "RedisListener.h"
 
+
+struct TraceTask {
+  std::string id;
+  std::string boc;
+
+  MSGPACK_DEFINE(id, boc);
+};
 
 void RedisListener::start_up() {
   alarm_timestamp() = td::Timestamp::now() ;
@@ -11,8 +19,21 @@ void RedisListener::alarm() {
     return;
   }
 
-  while (auto value = redis_.rpop(queue_name_)) {
-    auto boc_decoded = td::base64_decode(td::Slice(value.value()));
+  while (auto buffer = redis_.rpop(queue_name_)) {
+    TraceTask task;
+    try {
+        size_t offset = 0;
+        msgpack::unpacked res;
+        msgpack::unpack(res, buffer.value().data(), buffer.value().size(), offset);
+        msgpack::object obj = res.get();
+
+        obj.convert(task);
+    } catch (const std::exception &e) {
+        LOG(ERROR) << "Failed to unpack trace task: " << e.what();
+        continue;
+    }
+
+    auto boc_decoded = td::base64_decode(task.boc);
     if (boc_decoded.is_error()) {
       LOG(ERROR) << "Can't decode base64 boc: " << boc_decoded.move_as_error();
       continue;
@@ -24,11 +45,11 @@ void RedisListener::alarm() {
     }
     auto msg_cell = msg_cell_r.move_as_ok();
 
-    auto P = td::PromiseCreator::lambda([SelfId = actor_id(this), msg_hash = td::Bits256(msg_cell->get_hash().bits())](td::Result<Trace *> R) mutable {
+    auto P = td::PromiseCreator::lambda([SelfId = actor_id(this), task_id = std::move(task.id), mc_blkid = current_mc_block_id_](td::Result<Trace *> R) mutable {
       if (R.is_error()) {
-        td::actor::send_closure(SelfId, &RedisListener::trace_error, msg_hash, R.move_as_error());
+        td::actor::send_closure(SelfId, &RedisListener::trace_error, std::move(task_id), std::move(mc_blkid), R.move_as_error());
       } else {
-        td::actor::send_closure(SelfId, &RedisListener::trace_received, msg_hash, R.move_as_ok());
+        td::actor::send_closure(SelfId, &RedisListener::trace_received, std::move(task_id), std::move(mc_blkid), R.move_as_ok());
       }
     });
     std::unordered_map<block::StdAddress, std::shared_ptr<block::Account>, AddressHasher> shard_accounts;
@@ -48,42 +69,47 @@ void RedisListener::set_mc_data_state(MasterchainBlockDataState mc_data_state) {
   emulator_->set_libs(vm::Dictionary(libraries_root, 256));
 
   config_ = mc_data_state.config_;
+  current_mc_block_id_ = mc_data_state.shard_blocks_[0].block_data->block_id().id;
 }
 
-void RedisListener::trace_error(TraceId trace_id, td::Status error) {
-  LOG(ERROR) << "Failed to emulate trace_id " << trace_id.to_hex() << ": " << error;
-  known_ext_msgs_.erase(trace_id);
+void RedisListener::trace_error(std::string task_id, ton::BlockId mc_block_id, td::Status error) {
+  LOG(ERROR) << "Failed to emulate trace " << task_id << ": " << error;
+  TraceEmulationResult res{task_id, error.move_as_error(), mc_block_id};
+  trace_processor_(std::move(res), td::PromiseCreator::lambda([](td::Result<td::Unit> R) {}));
 }
 
-void RedisListener::trace_received(TraceId trace_id, Trace *trace) {
-  LOG(INFO) << "Emulated trace from ext msg " << trace_id.to_hex() << ": " << trace->transactions_count() << " transactions, " << trace->depth() << " depth";
+void RedisListener::trace_received(std::string task_id, ton::BlockId mc_block_id, Trace *trace) {
+  LOG(INFO) << "Emulated trace " << task_id << ": " << trace->transactions_count() << " transactions, " << trace->depth() << " depth";
   if constexpr (std::variant_size_v<Trace::Detector::DetectedInterface> > 0) {
-    auto P = td::PromiseCreator::lambda([SelfId = actor_id(this), trace_id = trace->id](td::Result<std::unique_ptr<Trace>> R) {
+    auto P = td::PromiseCreator::lambda([SelfId = actor_id(this), task_id, mc_block_id = std::move(mc_block_id), trace_id = trace->id](td::Result<std::unique_ptr<Trace>> R) {
       if (R.is_error()) {
-        td::actor::send_closure(SelfId, &RedisListener::trace_interfaces_error, trace_id, R.move_as_error());
+        td::actor::send_closure(SelfId, &RedisListener::trace_interfaces_error, std::move(task_id), std::move(mc_block_id), R.move_as_error());
         return;
       }
-      td::actor::send_closure(SelfId, &RedisListener::finish_processing, R.move_as_ok());
+      td::actor::send_closure(SelfId, &RedisListener::finish_processing, std::move(task_id), std::move(mc_block_id), R.move_as_ok());
     });
 
     td::actor::create_actor<TraceInterfaceDetector>("TraceInterfaceDetector", shard_states_, config_, std::unique_ptr<Trace>(trace), std::move(P)).release();
   } else {
-    finish_processing(std::unique_ptr<Trace>(trace));
+    finish_processing(std::move(task_id), std::move(mc_block_id), std::unique_ptr<Trace>(trace));
   }
 }
 
-void RedisListener::trace_interfaces_error(TraceId trace_id, td::Status error) {
-    LOG(ERROR) << "Failed to detect interfaces on trace_id " << trace_id.to_hex() << ": " << error;
+void RedisListener::trace_interfaces_error(std::string task_id, ton::BlockId mc_block_id, td::Status error) {
+    LOG(ERROR) << "Failed to detect interfaces on task " << task_id << ": " << error;
+    TraceEmulationResult res{task_id, error.move_as_error(), mc_block_id};
+    trace_processor_(std::move(res), td::PromiseCreator::lambda([](td::Result<td::Unit> R) {}));
 }
 
-void RedisListener::finish_processing(std::unique_ptr<Trace> trace) {
-    LOG(INFO) << "Finished emulating trace " << trace->id.to_hex();
-    auto P = td::PromiseCreator::lambda([trace_id = trace->id](td::Result<td::Unit> R) {
+void RedisListener::finish_processing(std::string task_id, ton::BlockId mc_block_id, std::unique_ptr<Trace> trace) {
+    LOG(INFO) << "Finished emulating trace " << task_id;
+    auto P = td::PromiseCreator::lambda([task_id](td::Result<td::Unit> R) {
       if (R.is_error()) {
-        LOG(ERROR) << "Failed to insert trace " << trace_id.to_hex() << ": " << R.move_as_error();
+        LOG(ERROR) << "Failed to insert trace task " << task_id << ": " << R.move_as_error();
         return;
       }
-      LOG(DEBUG) << "Successfully inserted trace " << trace_id.to_hex();
+      LOG(DEBUG) << "Successfully inserted trace task" << task_id;
     });
-    trace_processor_(std::move(trace), std::move(P));
+    TraceEmulationResult res{task_id, std::move(trace), mc_block_id};
+    trace_processor_(std::move(res), std::move(P));
 }

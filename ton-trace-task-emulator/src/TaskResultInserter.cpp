@@ -1,29 +1,31 @@
 #include "TaskResultInserter.h"
 #include "Serializer.hpp"
 
-struct Result {
-    std::string task_id;
-    bool success;
-    std::string error;
-    std::unique_ptr<Trace> trace;
-};
 
 class TaskResultInserter: public td::actor::Actor {
 private:
     sw::redis::Transaction transaction_;
-    td::Result<std::unique_ptr<Trace>> result_;
+    TraceEmulationResult result_;
     td::Promise<td::Unit> promise_;
 
     std::unique_ptr<Trace> trace_;
 
 public:
-    TaskResultInserter(sw::redis::Transaction&& transaction, td::Result<std::unique_ptr<Trace>> result, td::Promise<td::Unit> promise) :
+    TaskResultInserter(sw::redis::Transaction&& transaction, TraceEmulationResult result, td::Promise<td::Unit> promise) :
         transaction_(std::move(transaction)), result_(std::move(result)), promise_(std::move(promise)) {
-        trace_ = result_.move_as_ok();
     }
 
     void start_up() override {
+        auto result_channel = "result_channel_" + result_.task_id;
         try {
+            if (result_.trace.is_error()) {
+                transaction_.set("error_" + result_.task_id, result_.trace.error().message().str());
+                transaction_.publish(result_channel, "error");
+                transaction_.exec();
+                stop();
+                return;
+            }
+
             std::queue<std::reference_wrapper<Trace>> queue;
             std::unordered_map<block::StdAddress, typeof(trace_->interfaces), AddressHasher> addr_interfaces;
         
@@ -48,10 +50,6 @@ public:
                 }
                 auto tx = tx_r.move_as_ok();
 
-                if (!current.emulated) {
-                    delete_db_subtree(tx.in_msg.value().hash.to_hex(), tx_keys_to_delete, addr_keys_to_delete);
-                }
-
                 addr_interfaces[tx.account] = current.interfaces;
 
                 flattened_trace.push_back(TraceNode{std::move(tx), current.emulated});
@@ -59,13 +57,6 @@ public:
                 queue.pop();
             }
 
-            // delete previously emulated trace
-            for (const auto& key : tx_keys_to_delete) {
-                transaction_.hdel(trace_->id.to_hex(), key);
-            }
-            for (const auto& [addr, by_addr_key] : addr_keys_to_delete) {
-                transaction_.zrem(addr, by_addr_key);
-            }
 
             // insert new trace
             for (const auto& node : flattened_trace) {
@@ -73,10 +64,6 @@ public:
                 msgpack::pack(buffer, std::move(node));
 
                 transaction_.hset(trace_->id.to_hex(), node.transaction.in_msg.value().hash.to_hex(), buffer.str());
-
-                auto addr_raw = std::to_string(node.transaction.account.workchain) + ":" + node.transaction.account.addr.to_hex();
-                auto by_addr_key = trace_->id.to_hex() + ":" + node.transaction.in_msg.value().hash.to_hex();
-                transaction_.zadd(addr_raw, by_addr_key, node.transaction.lt);
             }
 
             // insert interfaces
@@ -99,26 +86,9 @@ public:
         }
         stop();
     }
-    void delete_db_subtree(std::string key, std::vector<std::string>& tx_keys, std::vector<std::pair<std::string, std::string>>& addr_keys) {
-        auto emulated_in_db = transaction_.redis().hget(trace_->id.to_hex(), key);
-        if (emulated_in_db) {
-            auto serialized = emulated_in_db.value();
-            TraceNode node;
-            msgpack::unpacked result;
-            msgpack::unpack(result, serialized.data(), serialized.size());
-            result.get().convert(node);
-            for (const auto& out_msg : node.transaction.out_msgs) {
-                delete_db_subtree(out_msg.hash.to_hex(), tx_keys, addr_keys);
-            }
-            tx_keys.push_back(key);
 
-            auto addr_raw = std::to_string(node.transaction.account.workchain) + ":" + node.transaction.account.addr.to_hex();
-            auto by_addr_key = trace_->id.to_hex() + ":" + node.transaction.in_msg.value().hash.to_hex();
-            addr_keys.push_back(std::make_pair(addr_raw, by_addr_key));
-        }
-    }
 };
 
-void RedisTaskResultInsertManager::insert(td::Result<std::unique_ptr<Trace>> result, td::Promise<td::Unit> promise) {
+void RedisTaskResultInsertManager::insert(TraceEmulationResult result, td::Promise<td::Unit> promise) {
     td::actor::create_actor<TaskResultInserter>("TraceInserter", redis_.transaction(), std::move(result), std::move(promise)).release();
 }

@@ -192,11 +192,26 @@ struct Transaction {
   MSGPACK_DEFINE(hash, account, lt, prev_trans_hash, prev_trans_lt, now, orig_status, end_status, in_msg, out_msgs, total_fees, account_state_hash_before, account_state_hash_after, description);
 };
 
+struct AccountState {
+  uint32_t last_tx_timestamp;
+  // uint64_t last_tx_lt;
+  // uint64_t balance;
+  // AccountStatus account_status;
+  // std::optional<td::Bits256> frozen_hash;
+  // std::optional<td::Bits256> code_hash;
+  // std::optional<td::Bits256> data_hash;
+
+  // MSGPACK_DEFINE(last_tx_timestamp, last_tx_lt, balance, account_status, frozen_hash, code_hash, data_hash);
+  MSGPACK_DEFINE(last_tx_timestamp);
+};
+
 struct TraceNode {
   Transaction transaction;
   bool emulated;
+  AccountState account_state_before{0}; //TODO
+  AccountState account_state_after{0};  //TODO
 
-  MSGPACK_DEFINE(transaction, emulated);
+  MSGPACK_DEFINE(transaction, emulated, account_state_before, account_state_after);
 };
 
 td::Result<int64_t> to_balance(vm::CellSlice& balance_slice) {

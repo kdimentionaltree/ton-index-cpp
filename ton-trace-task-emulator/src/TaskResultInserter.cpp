@@ -8,8 +8,6 @@ private:
     TraceEmulationResult result_;
     td::Promise<td::Unit> promise_;
 
-    std::unique_ptr<Trace> trace_;
-
 public:
     TaskResultInserter(sw::redis::Transaction&& transaction, TraceEmulationResult result, td::Promise<td::Unit> promise) :
         transaction_(std::move(transaction)), result_(std::move(result)), promise_(std::move(promise)) {
@@ -19,7 +17,7 @@ public:
         auto result_channel = "result_channel_" + result_.task_id;
         try {
             if (result_.trace.is_error()) {
-                transaction_.set("error_" + result_.task_id, result_.trace.error().message().str());
+                transaction_.set("error_channel_" + result_.task_id, result_.trace.error().message().str());
                 transaction_.publish(result_channel, "error");
                 transaction_.exec();
                 stop();
@@ -27,13 +25,13 @@ public:
             }
 
             std::queue<std::reference_wrapper<Trace>> queue;
-            std::unordered_map<block::StdAddress, typeof(trace_->interfaces), AddressHasher> addr_interfaces;
+            std::unordered_map<block::StdAddress, typeof(result_.trace.ok()->interfaces), AddressHasher> addr_interfaces;
         
             std::vector<std::string> tx_keys_to_delete;
             std::vector<std::pair<std::string, std::string>> addr_keys_to_delete;
             std::vector<TraceNode> flattened_trace;
 
-            queue.push(*trace_);
+            queue.push(*result_.trace.ok());
 
             while (!queue.empty()) {
                 Trace& current = queue.front();
@@ -63,19 +61,19 @@ public:
                 std::stringstream buffer;
                 msgpack::pack(buffer, std::move(node));
 
-                transaction_.hset(trace_->id.to_hex(), node.transaction.in_msg.value().hash.to_hex(), buffer.str());
+                transaction_.hset("result_channel_" + result_.task_id, node.transaction.in_msg.value().hash.to_hex(), buffer.str());
             }
 
-            // insert interfaces
-            for (const auto& [addr, interfaces] : addr_interfaces) {
-                auto interfaces_redis = parse_interfaces(interfaces);
-                std::stringstream buffer;
-                msgpack::pack(buffer, interfaces_redis);
-                auto addr_raw = std::to_string(addr.workchain) + ":" + addr.addr.to_hex();
-                transaction_.hset(trace_->id.to_hex(), addr_raw, buffer.str());
-            }
+            // // insert interfaces
+            // for (const auto& [addr, interfaces] : addr_interfaces) {
+            //     auto interfaces_redis = parse_interfaces(interfaces);
+            //     std::stringstream buffer;
+            //     msgpack::pack(buffer, interfaces_redis);
+            //     auto addr_raw = std::to_string(addr.workchain) + ":" + addr.addr.to_hex();
+            //     transaction_.hset(trace_->id.to_hex(), addr_raw, buffer.str());
+            // }
 
-            transaction_.publish("new_trace", trace_->id.to_hex());
+            transaction_.publish(result_channel, result_.trace.ok()->id.to_hex());
             transaction_.exec();
 
             promise_.set_value(td::Unit());

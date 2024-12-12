@@ -1,0 +1,27 @@
+basePath: /api/v1
+info:
+  contact: {}
+paths:
+  /emulateTrace:
+    post:
+      consumes:
+      - application/json
+      description: Emulate trace by external message.
+      parameters:
+      - description: External Message BOC
+        in: body
+        name: boc
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            type: string
+      summary: Emulate trace by external message
+      tags:
+      - emulate
+swagger: "2.0"

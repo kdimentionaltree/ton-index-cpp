@@ -35,12 +35,18 @@ void RedisListener::alarm() {
 
     auto boc_decoded = td::base64_decode(task.boc);
     if (boc_decoded.is_error()) {
-      LOG(ERROR) << "Can't decode base64 boc: " << boc_decoded.move_as_error();
+      auto error = td::Status::Error(PSLICE() << "Can't decode base64 boc: " << boc_decoded.move_as_error());
+      LOG(ERROR) << error;
+      TraceEmulationResult res{task.id, std::move(error), current_mc_block_id_};
+      trace_processor_(std::move(res), td::PromiseCreator::lambda([](td::Result<td::Unit> R) {}));
       continue;
     }
     auto msg_cell_r = vm::std_boc_deserialize(boc_decoded.move_as_ok());
     if (msg_cell_r.is_error()) {
-      LOG(ERROR) << "Can't deserialize message boc: " << msg_cell_r.move_as_error();
+      auto error = td::Status::Error(PSLICE() << "Can't deserialize message boc: " << msg_cell_r.move_as_error());
+      LOG(ERROR) << error;
+      TraceEmulationResult res{task.id, std::move(error), current_mc_block_id_};
+      trace_processor_(std::move(res), td::PromiseCreator::lambda([](td::Result<td::Unit> R) {}));
       continue;
     }
     auto msg_cell = msg_cell_r.move_as_ok();

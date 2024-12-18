@@ -1011,7 +1011,7 @@ std::string InsertBatchPostgres::insert_latest_account_states(pqxx::work &txn) {
 }
 
 std::string InsertBatchPostgres::insert_jetton_masters(pqxx::work &txn) {
-  std::unordered_map<block::StdAddress, JettonMasterDataV2, AddressHasher> jetton_masters;
+  std::unordered_map<block::StdAddress, JettonMasterDataV2> jetton_masters;
 
   for (auto i = insert_tasks_.rbegin(); i != insert_tasks_.rend(); ++i) {
     const auto& task = *i;
@@ -1057,7 +1057,7 @@ std::string InsertBatchPostgres::insert_jetton_masters(pqxx::work &txn) {
 }
 
 std::string InsertBatchPostgres::insert_jetton_wallets(pqxx::work &txn) {
-  std::unordered_map<block::StdAddress, JettonWalletDataV2, AddressHasher> jetton_wallets;
+  std::unordered_map<block::StdAddress, JettonWalletDataV2> jetton_wallets;
   for (auto i = insert_tasks_.rbegin(); i != insert_tasks_.rend(); ++i) {
     const auto& task = *i;
     for (const auto& jetton_wallet : task.parsed_block_->get_accounts_v2<JettonWalletDataV2>()) {
@@ -1071,7 +1071,7 @@ std::string InsertBatchPostgres::insert_jetton_wallets(pqxx::work &txn) {
     }
   }
 
-  std::unordered_set<block::StdAddress, AddressHasher> known_mintless_masters;
+  std::unordered_set<block::StdAddress> known_mintless_masters;
 
   std::initializer_list<std::string_view> columns = {
     "balance", "address", "owner", "jetton", "last_transaction_lt", "code_hash", "data_hash", "mintless_is_claimed"
@@ -1113,7 +1113,7 @@ std::string InsertBatchPostgres::insert_jetton_wallets(pqxx::work &txn) {
 }
 
 std::string InsertBatchPostgres::insert_nft_collections(pqxx::work &txn) {
-  std::unordered_map<block::StdAddress, NFTCollectionDataV2, AddressHasher> nft_collections;
+  std::unordered_map<block::StdAddress, NFTCollectionDataV2> nft_collections;
   for (auto i = insert_tasks_.rbegin(); i != insert_tasks_.rend(); ++i) {
     const auto& task = *i;
     for (const auto& nft_collection : task.parsed_block_->get_accounts_v2<NFTCollectionDataV2>()) {
@@ -1154,7 +1154,7 @@ std::string InsertBatchPostgres::insert_nft_collections(pqxx::work &txn) {
 }
 
 std::string InsertBatchPostgres::insert_nft_items(pqxx::work &txn) {
-  std::unordered_map<block::StdAddress, NFTItemDataV2, AddressHasher> nft_items;
+  std::unordered_map<block::StdAddress, NFTItemDataV2> nft_items;
   for (auto i = insert_tasks_.rbegin(); i != insert_tasks_.rend(); ++i) {
     const auto& task = *i;
     for (const auto& nft_item : task.parsed_block_->get_accounts_v2<NFTItemDataV2>()) {
@@ -1223,7 +1223,7 @@ std::string InsertBatchPostgres::insert_nft_items(pqxx::work &txn) {
 }
 
 std::string InsertBatchPostgres::insert_getgems_nft_sales(pqxx::work &txn) {
-  std::unordered_map<block::StdAddress, GetGemsNftFixPriceSaleData, AddressHasher> nft_sales;
+  std::unordered_map<block::StdAddress, GetGemsNftFixPriceSaleData> nft_sales;
   for (auto i = insert_tasks_.rbegin(); i != insert_tasks_.rend(); ++i) {
     const auto& task = *i;
     for (const auto& nft_sale : task.parsed_block_->get_accounts_v2<GetGemsNftFixPriceSaleData>()) {
@@ -1267,7 +1267,7 @@ std::string InsertBatchPostgres::insert_getgems_nft_sales(pqxx::work &txn) {
 }
 
 std::string InsertBatchPostgres::insert_getgems_nft_auctions(pqxx::work &txn) {
-  std::unordered_map<block::StdAddress, GetGemsNftAuctionData, AddressHasher> nft_auctions;
+  std::unordered_map<block::StdAddress, GetGemsNftAuctionData> nft_auctions;
   for (auto i = insert_tasks_.rbegin(); i != insert_tasks_.rend(); ++i) {
     const auto& task = *i;
     for (const auto& nft_auction : task.parsed_block_->get_accounts_v2<GetGemsNftAuctionData>()) {

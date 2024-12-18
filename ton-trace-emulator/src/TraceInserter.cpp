@@ -4,33 +4,32 @@
 class TraceInserter: public td::actor::Actor {
 private:
     sw::redis::Transaction transaction_;
-    std::unique_ptr<Trace> trace_;
+    Trace trace_;
     td::Promise<td::Unit> promise_;
 
 public:
-    TraceInserter(sw::redis::Transaction&& transaction, std::unique_ptr<Trace> trace, td::Promise<td::Unit> promise) :
+    TraceInserter(sw::redis::Transaction&& transaction, Trace trace, td::Promise<td::Unit> promise) :
         transaction_(std::move(transaction)), trace_(std::move(trace)), promise_(std::move(promise)) {
     }
 
     void start_up() override {
         try {
-            std::queue<std::reference_wrapper<Trace>> queue;
-            std::unordered_map<block::StdAddress, typeof(trace_->interfaces), AddressHasher> addr_interfaces;
+            std::queue<std::reference_wrapper<TraceNode>> queue;
         
             std::vector<std::string> tx_keys_to_delete;
             std::vector<std::pair<std::string, std::string>> addr_keys_to_delete;
-            std::vector<TraceNode> flattened_trace;
+            std::vector<RedisTraceNode> flattened_trace;
 
-            queue.push(*trace_);
+            queue.push(*trace_.root);
 
             while (!queue.empty()) {
-                Trace& current = queue.front();
+                TraceNode& current = queue.front();
 
                 for (auto& child : current.children) {
                     queue.push(*child);
                 }
 
-                auto tx_r = parse_tx(current.transaction_root, current.workchain);
+                auto tx_r = parse_tx(current.transaction_root, current.address.workchain);
                 if (tx_r.is_error()) {
                     promise_.set_error(tx_r.move_as_error_prefix("Failed to parse transaction: "));
                     stop();
@@ -42,16 +41,14 @@ public:
                     delete_db_subtree(tx.in_msg.value().hash.to_hex(), tx_keys_to_delete, addr_keys_to_delete);
                 }
 
-                addr_interfaces[tx.account] = current.interfaces;
-
-                flattened_trace.push_back(TraceNode{std::move(tx), current.emulated});
+                flattened_trace.push_back(RedisTraceNode{std::move(tx), current.emulated});
 
                 queue.pop();
             }
 
             // delete previously emulated trace
             for (const auto& key : tx_keys_to_delete) {
-                transaction_.hdel(trace_->id.to_hex(), key);
+                transaction_.hdel(trace_.id.to_hex(), key);
             }
             for (const auto& [addr, by_addr_key] : addr_keys_to_delete) {
                 transaction_.zrem(addr, by_addr_key);
@@ -62,23 +59,23 @@ public:
                 std::stringstream buffer;
                 msgpack::pack(buffer, std::move(node));
 
-                transaction_.hset(trace_->id.to_hex(), node.transaction.in_msg.value().hash.to_hex(), buffer.str());
+                transaction_.hset(trace_.id.to_hex(), node.transaction.in_msg.value().hash.to_hex(), buffer.str());
 
                 auto addr_raw = std::to_string(node.transaction.account.workchain) + ":" + node.transaction.account.addr.to_hex();
-                auto by_addr_key = trace_->id.to_hex() + ":" + node.transaction.in_msg.value().hash.to_hex();
+                auto by_addr_key = trace_.id.to_hex() + ":" + node.transaction.in_msg.value().hash.to_hex();
                 transaction_.zadd(addr_raw, by_addr_key, node.transaction.lt);
             }
 
             // insert interfaces
-            for (const auto& [addr, interfaces] : addr_interfaces) {
+            for (const auto& [addr, interfaces] : trace_.interfaces) {
                 auto interfaces_redis = parse_interfaces(interfaces);
                 std::stringstream buffer;
                 msgpack::pack(buffer, interfaces_redis);
                 auto addr_raw = std::to_string(addr.workchain) + ":" + addr.addr.to_hex();
-                transaction_.hset(trace_->id.to_hex(), addr_raw, buffer.str());
+                transaction_.hset(trace_.id.to_hex(), addr_raw, buffer.str());
             }
 
-            transaction_.publish("new_trace", trace_->id.to_hex());
+            transaction_.publish("new_trace", trace_.id.to_hex());
             transaction_.exec();
 
             promise_.set_value(td::Unit());
@@ -90,10 +87,10 @@ public:
         stop();
     }
     void delete_db_subtree(std::string key, std::vector<std::string>& tx_keys, std::vector<std::pair<std::string, std::string>>& addr_keys) {
-        auto emulated_in_db = transaction_.redis().hget(trace_->id.to_hex(), key);
+        auto emulated_in_db = transaction_.redis().hget(trace_.id.to_hex(), key);
         if (emulated_in_db) {
             auto serialized = emulated_in_db.value();
-            TraceNode node;
+            RedisTraceNode node;
             msgpack::unpacked result;
             msgpack::unpack(result, serialized.data(), serialized.size());
             result.get().convert(node);
@@ -103,12 +100,12 @@ public:
             tx_keys.push_back(key);
 
             auto addr_raw = std::to_string(node.transaction.account.workchain) + ":" + node.transaction.account.addr.to_hex();
-            auto by_addr_key = trace_->id.to_hex() + ":" + node.transaction.in_msg.value().hash.to_hex();
+            auto by_addr_key = trace_.id.to_hex() + ":" + node.transaction.in_msg.value().hash.to_hex();
             addr_keys.push_back(std::make_pair(addr_raw, by_addr_key));
         }
     }
 };
 
-void RedisInsertManager::insert(std::unique_ptr<Trace> trace, td::Promise<td::Unit> promise) {
+void RedisInsertManager::insert(Trace trace, td::Promise<td::Unit> promise) {
     td::actor::create_actor<TraceInserter>("TraceInserter", redis_.transaction(), std::move(trace), std::move(promise)).release();
 }

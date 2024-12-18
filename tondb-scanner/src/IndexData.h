@@ -592,21 +592,25 @@ using BlockchainInterfaceV2 = std::variant<JettonWalletDataV2,
                                            GetGemsNftFixPriceSaleData,
                                            GetGemsNftAuctionData>;
 
-struct BitArrayHasher {
-    std::size_t operator()(const td::Bits256& k) const {
-        std::size_t seed = 0;
-        for(const auto& el : k.as_array()) {
-            seed ^= std::hash<td::uint8>{}(el) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-        }
-        return seed;
+namespace std {
+template <>
+struct hash<td::Bits256> {
+  auto operator()(const td::Bits256 &k) const -> size_t {
+    std::size_t seed = 0;
+    for(const auto& el : k.as_array()) {
+        seed ^= std::hash<td::uint8>{}(el) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
     }
+    return seed;
+  }
 };
 
-struct AddressHasher {
-    std::size_t operator()(const block::StdAddress& addr) const {
-        return std::hash<td::uint32>{}(addr.workchain) ^ BitArrayHasher()(addr.addr);
-    }
+template <>
+struct hash<block::StdAddress> {
+  auto operator()(const block::StdAddress &addr) const -> size_t {
+    return std::hash<td::uint32>{}(addr.workchain) ^ std::hash<td::Bits256>{}(addr.addr);
+  }
 };
+}  // namespace std
 
 struct ParsedBlock {
   MasterchainBlockDataState mc_block_;
@@ -620,7 +624,7 @@ struct ParsedBlock {
   std::vector<BlockchainEvent> events_;
   std::vector<BlockchainInterface> interfaces_; // deprecated in favour of account_interfaces_
 
-  std::unordered_map<block::StdAddress, std::vector<BlockchainInterfaceV2>, AddressHasher> account_interfaces_;
+  std::unordered_map<block::StdAddress, std::vector<BlockchainInterfaceV2>> account_interfaces_;
   
   template <class T>
   std::vector<T> get_events() {

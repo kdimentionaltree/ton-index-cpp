@@ -55,7 +55,9 @@ void TraceTaskScheduler::fetch_seqnos() {
 }
 
 void TraceTaskScheduler::fetch_error(std::uint32_t seqno, td::Status error) {
-    LOG(ERROR) << "Failed to fetch seqno " << seqno << ": " << std::move(error);
+    if (error.code() != ton::ErrorCode::notready) {
+        LOG(ERROR) << "Failed to fetch seqno " << seqno << ": " << std::move(error);
+    }
     seqnos_to_fetch_.insert(seqno);
     alarm_timestamp() = td::Timestamp::in(0.1);
 }
@@ -73,6 +75,9 @@ void TraceTaskScheduler::seqno_fetched(std::uint32_t seqno, MasterchainBlockData
     }
 }
 
+// static uint32_t seqno = 43074152;
+// static bool changed = false;
+
 void TraceTaskScheduler::alarm() {
     auto P = td::PromiseCreator::lambda([SelfId = actor_id(this)](td::Result<ton::BlockSeqno> R){
         if (R.is_error()) {
@@ -81,6 +86,12 @@ void TraceTaskScheduler::alarm() {
             return;
         }
         td::actor::send_closure(SelfId, &TraceTaskScheduler::got_last_mc_seqno, R.move_as_ok());
+
+        // td::actor::send_closure(SelfId, &TraceTaskScheduler::got_last_mc_seqno, seqno - 1);
+        // if (!changed) {
+        //     seqno += 1;
+        //     changed = true;
+        // }
     });
     td::actor::send_closure(db_scanner_, &DbScanner::get_last_mc_seqno, std::move(P));
 

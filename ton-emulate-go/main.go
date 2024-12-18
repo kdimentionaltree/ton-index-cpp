@@ -3,7 +3,6 @@ package main
 import (
 	"bytes"
 	"context"
-	"fmt"
 	"math/rand"
 	"net/http"
 	"time"
@@ -108,26 +107,23 @@ func emulateTrace(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": error_msg})
 		return
 	}
-	trace_id := msg.Payload
+	if msg.Payload != "success" {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "unexpected message from Redis"})
+		return
+	}
 
-	// read whole hset from redis from key "result_channel_" + result_.task_id
-	hset, err := rdb.HGetAll(ctx, "result_channel_"+taskID).Result()
+	hset, err := rdb.HGetAll(ctx, "result_hset_"+taskID).Result()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to receive result from Redis"})
 		return
 	}
-	root_node := hset[trace_id]
 
-	var node models.TraceNode
-	unmarshal_err := msgpack.Unmarshal([]byte(root_node), &node)
-	if unmarshal_err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to decode result from Redis " + unmarshal_err.Error()})
+	result, err := models.TransformToAPIResponse(hset)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to transform result to API response " + err.Error()})
 		return
 	}
-
-	result := fmt.Sprintf("%#v", node)
-
-	c.JSON(http.StatusOK, gin.H{"result": result})
+	c.JSON(http.StatusOK, result)
 }
 
 // func main() {

@@ -7,7 +7,7 @@
 
 class ITraceInsertManager : public td::actor::Actor {
 public:
-    virtual void insert(std::unique_ptr<Trace> trace, td::Promise<td::Unit> promise) = 0;
+    virtual void insert(Trace trace, td::Promise<td::Unit> promise) = 0;
 };
 
 class RedisInsertManager: public ITraceInsertManager {
@@ -18,5 +18,5 @@ public:
     RedisInsertManager(std::string redis_dsn) :
         redis_(sw::redis::Redis(redis_dsn)) {}
 
-    void insert(std::unique_ptr<Trace> trace, td::Promise<td::Unit> promise);
+    void insert(Trace trace, td::Promise<td::Unit> promise);
 };

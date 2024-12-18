@@ -192,7 +192,7 @@ struct Transaction {
   MSGPACK_DEFINE(hash, account, lt, prev_trans_hash, prev_trans_lt, now, orig_status, end_status, in_msg, out_msgs, total_fees, account_state_hash_before, account_state_hash_after, description);
 };
 
-struct TraceNode {
+struct RedisTraceNode {
   Transaction transaction;
   bool emulated;
 
@@ -718,3 +718,33 @@ AddressInterfaces parse_interfaces(std::vector<typename Trace::Detector::Detecte
   }
   return result;
 }
+
+// enum AccountStatusExt {
+//   nonexist = block::Account::acc_nonexist,
+//   uninit = block::Account::acc_uninit,
+//   frozen = block::Account::acc_frozen,
+//   active = block::Account::acc_active,
+//   deleted = block::Account::acc_deleted
+// };
+// MSGPACK_ADD_ENUM(AccountStatusExt);
+
+
+// struct AccountState {
+//   td::Bits256 hash;
+//   uint64_t balance;
+//   AccountStatusExt status;
+//   td::Bits256 last_trans_hash;
+//   uint64_t last_trans_lt;
+
+//   MSGPACK_DEFINE(hash, balance, status, last_trans_hash, last_trans_lt);
+// };
+
+// AccountState parse_account_state(std::shared_ptr<block::Account> account) {
+//   AccountState state;
+//   state.hash = account->total_state->get_hash().bits();
+//   state.balance = account->balance.grams->to_long();
+//   state.status = static_cast<AccountStatusExt>(account->status);
+//   state.last_trans_hash = account->last_trans_hash_;
+//   state.last_trans_lt = account->last_trans_lt_;
+//   return state;
+// }

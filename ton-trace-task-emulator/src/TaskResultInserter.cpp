@@ -20,27 +20,27 @@ public:
                 transaction_.set("error_channel_" + result_.task_id, result_.trace.error().message().str());
                 transaction_.publish(result_channel, "error");
                 transaction_.exec();
+                promise_.set_value(td::Unit());
                 stop();
                 return;
             }
 
-            std::queue<std::reference_wrapper<Trace>> queue;
-            std::unordered_map<block::StdAddress, typeof(result_.trace.ok()->interfaces), AddressHasher> addr_interfaces;
+            std::queue<std::reference_wrapper<TraceNode>> queue;
         
             std::vector<std::string> tx_keys_to_delete;
             std::vector<std::pair<std::string, std::string>> addr_keys_to_delete;
-            std::vector<TraceNode> flattened_trace;
+            std::vector<RedisTraceNode> flattened_trace;
 
-            queue.push(*result_.trace.ok());
+            queue.push(*result_.trace.ok().root);
 
             while (!queue.empty()) {
-                Trace& current = queue.front();
+                TraceNode& current = queue.front();
 
                 for (auto& child : current.children) {
                     queue.push(*child);
                 }
 
-                auto tx_r = parse_tx(current.transaction_root, current.workchain);
+                auto tx_r = parse_tx(current.transaction_root, current.address.workchain);
                 if (tx_r.is_error()) {
                     promise_.set_error(tx_r.move_as_error_prefix("Failed to parse transaction: "));
                     stop();
@@ -48,9 +48,7 @@ public:
                 }
                 auto tx = tx_r.move_as_ok();
 
-                addr_interfaces[tx.account] = current.interfaces;
-
-                flattened_trace.push_back(TraceNode{std::move(tx), current.emulated});
+                flattened_trace.push_back(RedisTraceNode{std::move(tx), current.emulated});
 
                 queue.pop();
             }
@@ -61,8 +59,10 @@ public:
                 std::stringstream buffer;
                 msgpack::pack(buffer, std::move(node));
 
-                transaction_.hset("result_channel_" + result_.task_id, node.transaction.in_msg.value().hash.to_hex(), buffer.str());
+                transaction_.hset("result_hset_" + result_.task_id, node.transaction.in_msg.value().hash.to_hex(), buffer.str());
             }
+            transaction_.hset("result_hset_" + result_.task_id, "root_node", result_.trace.ok().id.to_hex());
+            transaction_.hset("result_hset_" + result_.task_id, "mc_block_id", result_.mc_block_id.to_str());
 
             // // insert interfaces
             // for (const auto& [addr, interfaces] : addr_interfaces) {
@@ -73,7 +73,7 @@ public:
             //     transaction_.hset(trace_->id.to_hex(), addr_raw, buffer.str());
             // }
 
-            transaction_.publish(result_channel, result_.trace.ok()->id.to_hex());
+            transaction_.publish(result_channel, "success");
             transaction_.exec();
 
             promise_.set_value(td::Unit());

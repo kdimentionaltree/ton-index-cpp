@@ -4,9 +4,10 @@
 #include <emulator/transaction-emulator.h>
 #include "TraceEmulator.h"
 
-td::Result<block::StdAddress> fetch_msg_dest_address(td::Ref<vm::Cell> msg, bool& is_external) {
+td::Result<block::StdAddress> fetch_msg_dest_address(td::Ref<vm::Cell> msg, int& type) {
     auto message_cs = vm::load_cell_slice(msg);
     int msg_tag = block::gen::t_CommonMsgInfo.get_tag(message_cs);
+    type = msg_tag;
     if (msg_tag == block::gen::CommonMsgInfo::ext_in_msg_info) {
         block::gen::CommonMsgInfo::Record_ext_in_msg_info info;
         if (!(tlb::unpack(message_cs, info))) {
@@ -16,7 +17,6 @@ td::Result<block::StdAddress> fetch_msg_dest_address(td::Ref<vm::Cell> msg, bool
         if (!block::tlb::t_MsgAddressInt.extract_std_address(info.dest, addr)) {
             return td::Status::Error("Can't extract address from external message");
         }
-        is_external = true;
         return addr;
     } else if (msg_tag == block::gen::CommonMsgInfo::int_msg_info) {
         block::gen::CommonMsgInfo::Record_int_msg_info info;
@@ -27,7 +27,6 @@ td::Result<block::StdAddress> fetch_msg_dest_address(td::Ref<vm::Cell> msg, bool
         if (!block::tlb::t_MsgAddressInt.extract_std_address(info.dest, addr)) {
             return td::Status::Error("Can't extract address from internal message");
         }
-        is_external = false;
         return addr;
     } else {
         return td::Status::Error("Ext out message found");
@@ -129,13 +128,11 @@ void TraceEmulatorImpl::emulate_transaction(block::Account account, block::StdAd
                 return;
             }
 
-            auto message_cs = vm::load_cell_slice(out_msg);
-            if (block::gen::t_CommonMsgInfo.get_tag(message_cs) == block::gen::CommonMsgInfo::ext_out_msg_info) {
+            int type;
+            auto out_msg_address_r = fetch_msg_dest_address(out_msg, type);
+            if (type == block::gen::CommonMsgInfo::ext_out_msg_info) {
                 continue;
             }
-
-            bool is_external;
-            auto out_msg_address_r = fetch_msg_dest_address(out_msg, is_external);
             if (out_msg_address_r.is_error()) {
                 promise.set_error(out_msg_address_r.move_as_error());
                 delete result;
@@ -203,8 +200,8 @@ void TraceEmulator::start_up() {
     emulator_->set_ignore_chksig(ignore_chksig_);
     emulator_->set_unixtime(td::Timestamp::now().at_unix());
 
-    bool is_external = true;
-    TRY_RESULT_PROMISE(promise_, account_addr, fetch_msg_dest_address(in_msg_, is_external));
+    int type;
+    TRY_RESULT_PROMISE(promise_, account_addr, fetch_msg_dest_address(in_msg_, type));
     emulator_actors_[account_addr] = td::actor::create_actor<TraceEmulatorImpl>("TraceEmulatorImpl", emulator_, shard_states, emulated_accounts_, emulated_accounts_mutex_, emulator_actors_);
 
     auto P = td::PromiseCreator::lambda([SelfId = actor_id(this)](td::Result<TraceNode *> R) {

@@ -76,7 +76,7 @@ struct Trace {
     }
 };
 
-td::Result<block::StdAddress> fetch_msg_dest_address(td::Ref<vm::Cell> msg, bool& is_external);
+td::Result<block::StdAddress> fetch_msg_dest_address(td::Ref<vm::Cell> msg, int& type);
 
 class TraceEmulatorImpl: public td::actor::Actor {
 private:

@@ -75,11 +75,16 @@ public:
         int child_ind = 0;
         for (const auto out_msg : tx.out_msgs) {
             // LOG(INFO) << "tx: " << tx.hash.to_hex() << " creating trace for msg " << out_msg.hash.to_hex();
-            auto message_cs = vm::load_cell_slice(out_msg.root);
-            if (block::gen::t_CommonMsgInfo.get_tag(message_cs) == block::gen::CommonMsgInfo::ext_out_msg_info) {
-                // skip ext out msgs
+            int type;
+            auto destination_r = fetch_msg_dest_address(out_msg.root, type);
+            if (type == block::gen::CommonMsgInfo::ext_out_msg_info) {
                 continue;
             }
+            if (destination_r.is_error()) {
+                LOG(ERROR) << "Failed to fetch destination address for out_msg " << out_msg.hash.to_hex();
+                continue;
+            }
+            auto destination = destination_r.move_as_ok();
 
             if (tx_by_in_msg_hash_.find(out_msg.hash) != tx_by_in_msg_hash_.end()) {
                 TransactionInfo& child_tx = tx_by_in_msg_hash_.at(out_msg.hash);
@@ -110,11 +115,11 @@ public:
 
                 {
                     std::lock_guard<std::mutex> lock(emulated_accounts_mutex_);
-                    if (emulator_actors_.find(out_msg.destination) == emulator_actors_.end()) {
-                        emulator_actors_[out_msg.destination] = td::actor::create_actor<TraceEmulatorImpl>("TraceEmulatorImpl", emulator_, shard_states_, emulated_accounts_, emulated_accounts_mutex_, emulator_actors_);
+                    if (emulator_actors_.find(destination) == emulator_actors_.end()) {
+                        emulator_actors_[destination] = td::actor::create_actor<TraceEmulatorImpl>("TraceEmulatorImpl", emulator_, shard_states_, emulated_accounts_, emulated_accounts_mutex_, emulator_actors_);
                     }
                 }
-                td::actor::send_closure(emulator_actors_[out_msg.destination].get(), &TraceEmulatorImpl::emulate, out_msg.root, out_msg.destination, 20, std::move(P));
+                td::actor::send_closure(emulator_actors_[destination].get(), &TraceEmulatorImpl::emulate, out_msg.root, destination, 20, std::move(P));
             }
             child_ind++;
         }

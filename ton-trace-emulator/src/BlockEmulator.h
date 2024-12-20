@@ -7,7 +7,6 @@
 
 struct OutMsgInfo {
     td::Bits256 hash;
-    block::StdAddress destination;
     td::Ref<vm::Cell> root;
 };
 

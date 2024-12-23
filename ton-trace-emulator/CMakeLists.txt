@@ -27,6 +27,7 @@ target_include_directories(ton-trace-emulator
     PUBLIC ${CMAKE_BINARY_DIR}/external/redis-plus-plus/src
 )
 target_compile_features(ton-trace-emulator PRIVATE cxx_std_17)
+target_compile_definitions(ton-trace-emulator PRIVATE -DMSGPACK_USE_DEFINE_MAP)
 target_link_libraries(ton-trace-emulator ton-trace-emulator-core hiredis redis++ msgpack-cxx)
 target_link_options(ton-trace-emulator PUBLIC -rdynamic)
 install(TARGETS ton-trace-emulator RUNTIME DESTINATION bin)

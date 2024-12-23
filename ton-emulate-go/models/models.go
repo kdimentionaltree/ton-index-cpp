@@ -17,6 +17,21 @@ const (
 	AccountStatusNonexist
 )
 
+func (d AccountStatus) MarshalJSON() ([]byte, error) {
+	switch d {
+	case AccountStatusUninit:
+		return json.Marshal("uninit")
+	case AccountStatusFrozen:
+		return json.Marshal("frozen")
+	case AccountStatusActive:
+		return json.Marshal("active")
+	case AccountStatusNonexist:
+		return json.Marshal("nonexist")
+	default:
+		return nil, fmt.Errorf("unknown account status: %d", d)
+	}
+}
+
 type AccStatusChange int
 
 const (
@@ -24,6 +39,19 @@ const (
 	AccStatusFrozen
 	AccStatusDeleted
 )
+
+func (d AccStatusChange) MarshalJSON() ([]byte, error) {
+	switch d {
+	case AccStatusUnchanged:
+		return json.Marshal("unchanged")
+	case AccStatusFrozen:
+		return json.Marshal("frozen")
+	case AccStatusDeleted:
+		return json.Marshal("deleted")
+	default:
+		return nil, fmt.Errorf("unknown account status change: %d", d)
+	}
+}
 
 type ComputeSkipReason int
 
@@ -33,6 +61,21 @@ const (
 	ComputeSkipNoGas
 	ComputeSkipSuspended
 )
+
+func (d ComputeSkipReason) MarshalJSON() ([]byte, error) {
+	switch d {
+	case ComputeSkipNoState:
+		return json.Marshal("no_state")
+	case ComputeSkipBadState:
+		return json.Marshal("bad_state")
+	case ComputeSkipNoGas:
+		return json.Marshal("no_gas")
+	case ComputeSkipSuspended:
+		return json.Marshal("suspended")
+	default:
+		return nil, fmt.Errorf("unknown compute skip reason: %d", d)
+	}
+}
 
 type TrStoragePhase struct {
 	StorageFeesCollected uint64          `msgpack:"storage_fees_collected" json:"storage_fees_collected"`
@@ -158,6 +201,27 @@ type ComputePhaseVar struct {
 	Data interface{} // Can be TrComputePhaseSkipped or TrComputePhaseVm
 }
 
+func (bpv ComputePhaseVar) MarshalJSON() ([]byte, error) {
+	dataBytes, err := json.Marshal(bpv.Data)
+	if err != nil {
+		return nil, err
+	}
+
+	var dataMap map[string]interface{}
+	err = json.Unmarshal(dataBytes, &dataMap)
+	if err != nil {
+		return nil, err
+	}
+
+	if bpv.Type == 0 {
+		dataMap["skipped"] = true
+	} else {
+		dataMap["skipped"] = false
+	}
+
+	return json.Marshal(dataMap)
+}
+
 var _ msgpack.CustomDecoder = (*ComputePhaseVar)(nil)
 
 func (s *ComputePhaseVar) DecodeMsgpack(dec *msgpack.Decoder) error {
@@ -194,6 +258,29 @@ func (s *ComputePhaseVar) DecodeMsgpack(dec *msgpack.Decoder) error {
 type BouncePhaseVar struct {
 	Type uint8
 	Data interface{} // Can be TrBouncePhaseNegfunds, TrBouncePhaseNofunds or TrBouncePhaseOk
+}
+
+func (bpv BouncePhaseVar) MarshalJSON() ([]byte, error) {
+	dataBytes, err := json.Marshal(bpv.Data)
+	if err != nil {
+		return nil, err
+	}
+
+	var dataMap map[string]interface{}
+	err = json.Unmarshal(dataBytes, &dataMap)
+	if err != nil {
+		return nil, err
+	}
+
+	if bpv.Type == 0 {
+		dataMap["type"] = "negfunds"
+	} else if bpv.Type == 1 {
+		dataMap["type"] = "nofunds"
+	} else {
+		dataMap["type"] = "ok"
+	}
+
+	return json.Marshal(dataMap)
 }
 
 var _ msgpack.CustomDecoder = (*BouncePhaseVar)(nil)
@@ -257,26 +344,6 @@ func (h Hash) MarshalText() (data []byte, err error) {
 // MarshalJSON implements json.Marshaler interface
 func (h Hash) MarshalJSON() ([]byte, error) {
 	return json.Marshal(base64.StdEncoding.EncodeToString(h[:]))
-}
-
-// UnmarshalJSON implements json.Unmarshaler interface
-func (h *Hash) UnmarshalJSON(data []byte) error {
-	var s string
-	if err := json.Unmarshal(data, &s); err != nil {
-		return err
-	}
-
-	decoded, err := base64.StdEncoding.DecodeString(s)
-	if err != nil {
-		return err
-	}
-
-	if len(decoded) != 32 {
-		return fmt.Errorf("invalid hash length: expected 32 bytes, got %d", len(decoded))
-	}
-
-	copy(h[:], decoded)
-	return nil
 }
 
 // EncodeMsgpack implements msgpack.CustomEncoder interface

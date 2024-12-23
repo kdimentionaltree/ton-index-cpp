@@ -36,10 +36,12 @@ td::Result<block::StdAddress> fetch_msg_dest_address(td::Ref<vm::Cell> msg, int&
 void TraceEmulatorImpl::emulate(td::Ref<vm::Cell> in_msg, block::StdAddress address, size_t depth, td::Promise<TraceNode *> promise) {
     {
         std::unique_lock<std::mutex> lock(emulated_accounts_mutex_);
-        auto account_it = emulated_accounts_.find(address);
-        if (account_it != emulated_accounts_.end()) {
+        auto range = emulated_accounts_.equal_range(address);
+        if (range.first != range.second) {
+            auto it = std::prev(range.second);
+            auto account = it->second;
             lock.unlock();
-            emulate_transaction(std::move(account_it->second), address, in_msg, depth, std::move(promise));
+            emulate_transaction(std::move(account), address, in_msg, depth, std::move(promise));
             return;
         }
     }
@@ -61,7 +63,11 @@ void TraceEmulatorImpl::emulate(td::Ref<vm::Cell> in_msg, block::StdAddress addr
                 promise.set_error(account.move_as_error());
                 return;
             }
-
+            {
+                auto account_state = account.ok();
+                std::lock_guard<std::mutex> lock(emulated_accounts_mutex_);
+                emulated_accounts_.insert({address, std::move(account_state)});
+            }
             emulate_transaction(account.move_as_ok(), address, in_msg, depth, std::move(promise));
             return;
         }
@@ -110,7 +116,7 @@ void TraceEmulatorImpl::emulate_transaction(block::Account account, block::StdAd
 
     {
         std::lock_guard<std::mutex> lock(emulated_accounts_mutex_);
-        emulated_accounts_[address] = std::move(emulation_success.account);
+        emulated_accounts_.insert({address, std::move(emulation_success.account)});
     }
     
     block::gen::Transaction::Record trans;

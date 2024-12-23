@@ -24,14 +24,15 @@ public:
                 stop();
                 return;
             }
+            auto& trace = result_.trace.ok();
 
             std::queue<std::reference_wrapper<TraceNode>> queue;
         
             std::vector<std::string> tx_keys_to_delete;
             std::vector<std::pair<std::string, std::string>> addr_keys_to_delete;
-            std::vector<RedisTraceNode> flattened_trace;
+            std::vector<RedisTraceNode> nodes;
 
-            queue.push(*result_.trace.ok().root);
+            queue.push(*trace.root);
 
             while (!queue.empty()) {
                 TraceNode& current = queue.front();
@@ -48,30 +49,35 @@ public:
                 }
                 auto tx = tx_r.move_as_ok();
 
-                flattened_trace.push_back(RedisTraceNode{std::move(tx), current.emulated});
+                nodes.push_back(RedisTraceNode{std::move(tx), current.emulated});
 
                 queue.pop();
             }
 
 
             // insert new trace
-            for (const auto& node : flattened_trace) {
+            for (const auto& node : nodes) {
                 std::stringstream buffer;
                 msgpack::pack(buffer, std::move(node));
 
-                transaction_.hset("result_hset_" + result_.task_id, node.transaction.in_msg.value().hash.to_hex(), buffer.str());
+                transaction_.hset("result_hset_" + result_.task_id, td::base64_encode(node.transaction.in_msg.value().hash.as_slice()), buffer.str());
             }
-            transaction_.hset("result_hset_" + result_.task_id, "root_node", result_.trace.ok().id.to_hex());
+            transaction_.hset("result_hset_" + result_.task_id, "root_node", td::base64_encode(result_.trace.ok().id.as_slice()));
             transaction_.hset("result_hset_" + result_.task_id, "mc_block_id", result_.mc_block_id.to_str());
 
-            // // insert interfaces
-            // for (const auto& [addr, interfaces] : addr_interfaces) {
-            //     auto interfaces_redis = parse_interfaces(interfaces);
-            //     std::stringstream buffer;
-            //     msgpack::pack(buffer, interfaces_redis);
-            //     auto addr_raw = std::to_string(addr.workchain) + ":" + addr.addr.to_hex();
-            //     transaction_.hset(trace_->id.to_hex(), addr_raw, buffer.str());
-            // }
+            std::unordered_map<td::Bits256, AccountState> account_states;
+            for (const auto& [addr, account] : trace.emulated_accounts) {
+                auto account_parsed_r = parse_account(account);
+                if (account_parsed_r.is_error()) {
+                    promise_.set_error(account_parsed_r.move_as_error_prefix("Failed to parse account: "));
+                    stop();
+                    return;
+                }
+                account_states[account_parsed_r.ok().hash] = account_parsed_r.move_as_ok();
+            }
+            std::stringstream buffer;
+            msgpack::pack(buffer, account_states);
+            transaction_.hset("result_hset_" + result_.task_id, "account_states", buffer.str());
 
             transaction_.publish(result_channel, "success");
             transaction_.exec();

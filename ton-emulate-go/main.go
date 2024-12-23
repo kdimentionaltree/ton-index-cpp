@@ -126,32 +126,6 @@ func emulateTrace(c *gin.Context) {
 	c.JSON(http.StatusOK, result)
 }
 
-// func main() {
-// 	rdb := redis.NewClient(&redis.Options{
-// 		Addr: "localhost:6379", // Redis server address
-// 	})
-// 	taskID := "ZAHyzMfcMU"
-
-// 	ctx := context.Background()
-// 	hset, err := rdb.HGetAll(ctx, "result_channel_"+taskID).Result()
-// 	if err != nil {
-// 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to receive result from Redis"})
-// 		return
-// 	}
-
-//     // get any value from hset
-//     some_node =
-
-// 	// root_node := hset[trace_id]
-
-// 	var node models.TraceNode
-// 	unmarshal_err := msgpack.Unmarshal([]byte(root_node), &node)
-// 	if unmarshal_err != nil {
-// 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to decode result from Redis " + unmarshal_err.Error()})
-// 		return
-// 	}
-// }
-
 func main() {
 	r := gin.Default()
 

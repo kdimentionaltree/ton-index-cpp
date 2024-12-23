@@ -8,6 +8,14 @@
 
 using TraceId = td::Bits256;
 
+struct AddrCmp {
+    bool operator()(const block::StdAddress& lhs, const block::StdAddress& rhs) const {
+        if (lhs.workchain != rhs.workchain) {
+            return lhs.workchain < rhs.workchain;
+        }
+        return lhs.addr < rhs.addr;
+    }
+};
 
 struct TraceNode {
     td::Bits256 node_id; // hash of cur tx in msg
@@ -60,7 +68,7 @@ struct Trace {
                                         NftItemDetectorR, NftCollectionDetectorR,
                                         GetGemsNftFixPriceSale, GetGemsNftAuction>;
 
-    std::unordered_map<block::StdAddress, block::Account> emulated_accounts;
+    std::multimap<block::StdAddress, block::Account, AddrCmp> emulated_accounts;
     std::unordered_map<block::StdAddress, std::vector<typename Detector::DetectedInterface>> interfaces;
 
     int depth() const {
@@ -82,7 +90,7 @@ class TraceEmulatorImpl: public td::actor::Actor {
 private:
     std::shared_ptr<emulator::TransactionEmulator> emulator_;
     std::vector<td::Ref<vm::Cell>> shard_states_;
-    std::unordered_map<block::StdAddress, block::Account>& emulated_accounts_;
+    std::multimap<block::StdAddress, block::Account, AddrCmp>& emulated_accounts_;
     std::mutex& emulated_accounts_mutex_;
     std::unordered_map<block::StdAddress, td::actor::ActorOwn<TraceEmulatorImpl>>& emulator_actors_;
     std::unordered_map<TraceNode *, td::Promise<TraceNode *>> result_promises_;
@@ -90,7 +98,7 @@ private:
     uint32_t utime_{0};
 public:
     TraceEmulatorImpl(std::shared_ptr<emulator::TransactionEmulator> emulator, std::vector<td::Ref<vm::Cell>> shard_states, 
-                  std::unordered_map<block::StdAddress, block::Account>& emulated_accounts, std::mutex& emulated_accounts_mutex,
+                  std::multimap<block::StdAddress, block::Account, AddrCmp>& emulated_accounts, std::mutex& emulated_accounts_mutex,
                   std::unordered_map<block::StdAddress, td::actor::ActorOwn<TraceEmulatorImpl>>& emulator_actors)
         : emulator_(std::move(emulator)), shard_states_(std::move(shard_states)), 
           emulated_accounts_(emulated_accounts), emulated_accounts_mutex_(emulated_accounts_mutex), emulator_actors_(emulator_actors) {
@@ -115,7 +123,7 @@ private:
     td::Promise<Trace> promise_;
 
     std::shared_ptr<emulator::TransactionEmulator> emulator_;
-    std::unordered_map<block::StdAddress, block::Account> emulated_accounts_;
+    std::multimap<block::StdAddress, block::Account, AddrCmp> emulated_accounts_;
     std::mutex emulated_accounts_mutex_;
     std::unordered_map<block::StdAddress, td::actor::ActorOwn<TraceEmulatorImpl>> emulator_actors_;
 public:

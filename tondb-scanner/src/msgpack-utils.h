@@ -30,7 +30,8 @@ namespace msgpack {
     struct pack<td::Bits256> {
       template <typename Stream>
       msgpack::packer<Stream>& operator()(msgpack::packer<Stream>& o, const td::Bits256& v) const {
-        o.pack(v.to_hex());
+        o.pack_bin(32);
+        o.pack_bin_body((const char*)v.data(), 32);
         return o;
       }
     };
@@ -38,9 +39,10 @@ namespace msgpack {
     template <>
     struct convert<td::Bits256> {
       msgpack::object const& operator()(msgpack::object const& o, td::Bits256& v) const {
-        if (o.type != msgpack::type::STR) throw msgpack::type_error();
-        std::string hex = o.as<std::string>();
-        if (v.from_hex(hex) < 0) throw std::runtime_error("Failed to deserialize td::Bits256");
+        if (o.type != msgpack::type::BIN || o.via.bin.size != 32) {
+          throw msgpack::type_error();
+        }
+        std::memcpy(v.data(), o.via.bin.ptr, 32);
         return o;
       }
     };

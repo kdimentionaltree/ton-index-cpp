@@ -11,7 +11,7 @@ private:
 
     std::vector<td::Ref<vm::Cell>> shard_states_;
     std::shared_ptr<emulator::TransactionEmulator> emulator_;
-    std::unordered_map<block::StdAddress, block::Account> emulated_accounts_;
+    std::multimap<block::StdAddress, block::Account, AddrCmp> emulated_accounts_;
     std::mutex emulated_accounts_mutex_;
     std::unordered_map<block::StdAddress, td::actor::ActorOwn<TraceEmulatorImpl>> emulator_actors_;
 

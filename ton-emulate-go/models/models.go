@@ -1,6 +1,8 @@
 package models
 
 import (
+	"encoding/base64"
+	"encoding/json"
 	"fmt"
 
 	"github.com/vmihailenco/msgpack/v5"
@@ -59,8 +61,8 @@ type TrComputePhaseVm struct {
 	ExitCode         int32   `msgpack:"exit_code" json:"exit_code"`
 	ExitArg          *int32  `msgpack:"exit_arg" json:"exit_arg"`
 	VmSteps          uint32  `msgpack:"vm_steps" json:"vm_steps"`
-	VmInitStateHash  string  `msgpack:"vm_init_state_hash" json:"vm_init_state_hash"`
-	VmFinalStateHash string  `msgpack:"vm_final_state_hash" json:"vm_final_state_hash"`
+	VmInitStateHash  Hash    `msgpack:"vm_init_state_hash" json:"vm_init_state_hash"`
+	VmFinalStateHash Hash    `msgpack:"vm_final_state_hash" json:"vm_final_state_hash"`
 }
 
 type StorageUsedShort struct {
@@ -81,7 +83,7 @@ type TrActionPhase struct {
 	SpecActions     uint16           `msgpack:"spec_actions" json:"spec_actions"`
 	SkippedActions  uint16           `msgpack:"skipped_actions" json:"skipped_actions"`
 	MsgsCreated     uint16           `msgpack:"msgs_created" json:"msgs_created"`
-	ActionListHash  string           `msgpack:"action_list_hash" json:"action_list_hash"`
+	ActionListHash  Hash             `msgpack:"action_list_hash" json:"action_list_hash"`
 	TotMsgSize      StorageUsedShort `msgpack:"tot_msg_size" json:"tot_msg_size"`
 }
 
@@ -101,7 +103,7 @@ type TrBouncePhaseOk struct {
 }
 
 type Message struct {
-	Hash         string  `msgpack:"hash" json:"hash"`
+	Hash         Hash    `msgpack:"hash" json:"hash"`
 	Source       *string `msgpack:"source" json:"source"`
 	Destination  *string `msgpack:"destination" json:"destination"`
 	Value        *uint64 `msgpack:"value" json:"value"`
@@ -130,10 +132,10 @@ type TransactionDescr struct {
 }
 
 type Transaction struct {
-	Hash                   string           `msgpack:"hash" json:"hash"`
+	Hash                   Hash             `msgpack:"hash" json:"-"`
 	Account                string           `msgpack:"account" json:"account"`
 	Lt                     uint64           `msgpack:"lt" json:"lt,string"`
-	PrevTransHash          string           `msgpack:"prev_trans_hash" json:"prev_trans_hash"`
+	PrevTransHash          Hash             `msgpack:"prev_trans_hash" json:"prev_trans_hash"`
 	PrevTransLt            uint64           `msgpack:"prev_trans_lt" json:"prev_trans_lt,string"`
 	Now                    uint32           `msgpack:"now" json:"now"`
 	OrigStatus             AccountStatus    `msgpack:"orig_status" json:"orig_status"`
@@ -141,8 +143,8 @@ type Transaction struct {
 	InMsg                  *Message         `msgpack:"in_msg" json:"in_msg"`
 	OutMsgs                []Message        `msgpack:"out_msgs" json:"out_msgs"`
 	TotalFees              uint64           `msgpack:"total_fees" json:"total_fees"`
-	AccountStateHashBefore string           `msgpack:"account_state_hash_before" json:"account_state_hash_before"`
-	AccountStateHashAfter  string           `msgpack:"account_state_hash_after" json:"account_state_hash_after"`
+	AccountStateHashBefore Hash             `msgpack:"account_state_hash_before" json:"account_state_hash_before"`
+	AccountStateHashAfter  Hash             `msgpack:"account_state_hash_after" json:"account_state_hash_after"`
 	Description            TransactionDescr `msgpack:"description" json:"description"`
 }
 
@@ -231,4 +233,68 @@ func (s *BouncePhaseVar) DecodeMsgpack(dec *msgpack.Decoder) error {
 
 	s.Type = index
 	return err
+}
+
+type AccountState struct {
+	Hash          Hash    `msgpack:"hash" json:"-"`
+	Balance       uint64  `msgpack:"balance" json:"balance"`
+	AccountStatus string  `msgpack:"account_status" json:"account_status"`
+	FrozenHash    *Hash   `msgpack:"frozen_hash" json:"frozen_hash"`
+	CodeHash      *Hash   `msgpack:"code_hash" json:"code_hash"`
+	DataBoc       *string `msgpack:"data_boc" json:"data_boc"`
+	DataHash      *Hash   `msgpack:"data_hash" json:"data_hash"`
+	LastTransHash *Hash   `msgpack:"last_trans_hash" json:"last_trans_hash"`
+	LastTransLt   *uint64 `msgpack:"last_trans_lt" json:"last_trans_lt"`
+	Timestamp     *uint32 `msgpack:"timestamp" json:"timestamp"`
+}
+
+type Hash [32]byte
+
+func (h Hash) MarshalText() (data []byte, err error) {
+	return []byte(base64.StdEncoding.EncodeToString(h[:])), nil
+}
+
+// MarshalJSON implements json.Marshaler interface
+func (h Hash) MarshalJSON() ([]byte, error) {
+	return json.Marshal(base64.StdEncoding.EncodeToString(h[:]))
+}
+
+// UnmarshalJSON implements json.Unmarshaler interface
+func (h *Hash) UnmarshalJSON(data []byte) error {
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+
+	decoded, err := base64.StdEncoding.DecodeString(s)
+	if err != nil {
+		return err
+	}
+
+	if len(decoded) != 32 {
+		return fmt.Errorf("invalid hash length: expected 32 bytes, got %d", len(decoded))
+	}
+
+	copy(h[:], decoded)
+	return nil
+}
+
+// EncodeMsgpack implements msgpack.CustomEncoder interface
+func (h Hash) EncodeMsgpack(enc *msgpack.Encoder) error {
+	return enc.EncodeBytes(h[:])
+}
+
+// DecodeMsgpack implements msgpack.CustomDecoder interface
+func (h *Hash) DecodeMsgpack(dec *msgpack.Decoder) error {
+	bytes, err := dec.DecodeBytes()
+	if err != nil {
+		return err
+	}
+
+	if len(bytes) != 32 {
+		return fmt.Errorf("invalid hash length: expected 32 bytes, got %d", len(bytes))
+	}
+
+	copy(h[:], bytes)
+	return nil
 }

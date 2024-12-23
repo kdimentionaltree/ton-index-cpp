@@ -729,22 +729,47 @@ AddressInterfaces parse_interfaces(std::vector<typename Trace::Detector::Detecte
 // MSGPACK_ADD_ENUM(AccountStatusExt);
 
 
-// struct AccountState {
-//   td::Bits256 hash;
-//   uint64_t balance;
-//   AccountStatusExt status;
-//   td::Bits256 last_trans_hash;
-//   uint64_t last_trans_lt;
+struct AccountState {
+  td::Bits256 hash;
+  uint64_t balance;
+  std::string account_status; // "uninit", "frozen", "active", "nonexist"
+  std::optional<td::Bits256> frozen_hash;
+  std::optional<td::Bits256> code_hash;
+  std::optional<std::string> data_boc;
+  std::optional<td::Bits256> data_hash;
+  std::optional<td::Bits256> last_trans_hash;
+  std::optional<uint64_t> last_trans_lt;
+  std::optional<uint32_t> timestamp;
 
-//   MSGPACK_DEFINE(hash, balance, status, last_trans_hash, last_trans_lt);
-// };
+  MSGPACK_DEFINE(hash, timestamp, balance, account_status, frozen_hash, code_hash, data_boc, data_hash, last_trans_hash, last_trans_lt);
+};
 
-// AccountState parse_account_state(std::shared_ptr<block::Account> account) {
-//   AccountState state;
-//   state.hash = account->total_state->get_hash().bits();
-//   state.balance = account->balance.grams->to_long();
-//   state.status = static_cast<AccountStatusExt>(account->status);
-//   state.last_trans_hash = account->last_trans_hash_;
-//   state.last_trans_lt = account->last_trans_lt_;
-//   return state;
-// }
+td::Result<AccountState> parse_account(const block::Account& account) {
+  AccountState result;
+  int account_tag = block::gen::t_Account.get_tag(vm::load_cell_slice(account.total_state));
+  switch (account_tag) {
+  case block::gen::Account::account_none: {
+    result.account_status = "nonexist";
+    result.hash = account.total_state->get_hash().bits();
+    break;
+  }
+  case block::gen::Account::account: {
+    TRY_RESULT(schema_account, ParseQuery::parse_account(account.total_state, account.now_, account.last_trans_hash_, account.last_trans_lt_));
+    result.hash = schema_account.hash;
+    result.timestamp = schema_account.timestamp;
+    result.balance = schema_account.balance;
+    result.account_status = schema_account.account_status;
+    result.frozen_hash = schema_account.frozen_hash;
+    result.code_hash = schema_account.code_hash;
+    TRY_RESULT_ASSIGN(result.data_boc, convert::to_bytes(schema_account.data));
+    result.data_hash = schema_account.data_hash;
+    result.last_trans_hash = schema_account.last_trans_hash;
+    result.last_trans_lt = schema_account.last_trans_lt;
+    break;
+  }
+  default:
+    return td::Status::Error("Unknown account tag");
+  }
+  
+  return result;
+}

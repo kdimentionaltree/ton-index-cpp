@@ -14,11 +14,6 @@ void RedisListener::start_up() {
 }
 
 void RedisListener::alarm() {
-  if (mc_data_state_.config_ == nullptr) {
-    alarm_timestamp() = td::Timestamp::in(0.1);
-    return;
-  }
-
   while (auto buffer = redis_.rpop(queue_name_)) {
     TraceTask task;
     try {
@@ -50,6 +45,12 @@ void RedisListener::alarm() {
       continue;
     }
     auto msg_cell = msg_cell_r.move_as_ok();
+
+    if (mc_data_state_.config_ == nullptr) {
+      trace_error(task.id, current_mc_block_id_, td::Status::Error("RedisListener not ready"));
+      alarm_timestamp() = td::Timestamp::in(0.1);
+      return;
+    }
 
     auto P = td::PromiseCreator::lambda([SelfId = actor_id(this), task_id = std::move(task.id), mc_blkid = current_mc_block_id_](td::Result<Trace> R) mutable {
       if (R.is_error()) {

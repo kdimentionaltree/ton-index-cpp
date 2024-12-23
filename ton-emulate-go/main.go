@@ -51,6 +51,9 @@ func generateTaskID() string {
 // @Success 200 {string} Helloworld
 // @Router /emulateTrace [post]
 func emulateTrace(c *gin.Context) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
 	var req EmulateRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
@@ -79,8 +82,6 @@ func emulateTrace(c *gin.Context) {
 		Addr: "localhost:6379", // Redis server address
 	})
 
-	ctx := context.Background()
-
 	// Push the packed task to the Redis queue
 	if err := rdb.LPush(ctx, "somequeue", buf.Bytes()).Err(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to push task to Redis"})
@@ -94,15 +95,14 @@ func emulateTrace(c *gin.Context) {
 	// Wait for the result
 	msg, err := pubsub.ReceiveMessage(ctx)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to receive result from Redis"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to receive result from Redis: " + err.Error()})
 		return
 	}
 
 	if msg.Payload == "error" {
 		error_msg, err := rdb.Get(ctx, "error_channel_"+taskID).Result()
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to receive error from Redis"})
-			return
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to receive result from Redis: " + err.Error()})
 		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": error_msg})
 		return
@@ -114,7 +114,7 @@ func emulateTrace(c *gin.Context) {
 
 	hset, err := rdb.HGetAll(ctx, "result_hset_"+taskID).Result()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to receive result from Redis"})
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to receive result from Redis: " + err.Error()})
 		return
 	}
 

@@ -18,6 +18,7 @@ public:
         try {
             if (result_.trace.is_error()) {
                 transaction_.set("error_channel_" + result_.task_id, result_.trace.error().message().str());
+                transaction_.expire("error_channel_" + result_.task_id, 60);
                 transaction_.publish(result_channel, "error");
                 transaction_.exec();
                 promise_.set_value(td::Unit());
@@ -78,6 +79,8 @@ public:
             std::stringstream buffer;
             msgpack::pack(buffer, account_states);
             transaction_.hset("result_hset_" + result_.task_id, "account_states", buffer.str());
+
+            transaction_.expire("result_hset_" + result_.task_id, 60);
 
             transaction_.publish(result_channel, "success");
             transaction_.exec();

@@ -1,8 +1,11 @@
-basePath: /api/v1
+basePath: /emulate
 info:
   contact: {}
+  description: TON Emulate API emulates trace by external message.
+  title: TON Emulate API
+  version: 0.0.1
 paths:
-  /emulateTrace:
+  /v1/emulateTrace:
     post:
       consumes:
       - application/json

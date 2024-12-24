@@ -3,22 +3,23 @@ package main
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"flag"
 	"fmt"
+	"log"
 	"math/rand"
-	"net/http"
 	"time"
 
-	"github.com/gin-gonic/gin"
-	swaggerfiles "github.com/swaggo/files"
-	ginSwagger "github.com/swaggo/gin-swagger"
+	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/swagger"
 
-	docs "ton-emulate-go/docs"
 	models "ton-emulate-go/models"
 
 	"github.com/go-redis/redis/v8"
 
 	"github.com/vmihailenco/msgpack/v5"
+
+	_ "ton-emulate-go/docs"
 )
 
 type TraceTask struct {
@@ -27,7 +28,16 @@ type TraceTask struct {
 }
 
 type EmulateRequest struct {
-	Boc string `json:"boc"`
+	Boc string `json:"boc" validate:"required"`
+}
+
+// validate function for EmulateRequest
+func (req EmulateRequest) Validate() error {
+	if req.Boc == "" {
+		return fmt.Errorf("boc is required")
+	}
+	_, err := base64.StdEncoding.Strict().DecodeString(req.Boc)
+	return err
 }
 
 // Command-line flags
@@ -35,6 +45,7 @@ var (
 	redisAddr  = flag.String("redis", "localhost:6379", "Redis server dsn")
 	queueName  = flag.String("redis-queue", "somequeue", "Redis queue name")
 	serverPort = flag.Int("port", 8080, "Server port")
+	prefork    = flag.Bool("prefork", false, "Use prefork")
 )
 
 func generateTaskID() string {
@@ -47,7 +58,10 @@ func generateTaskID() string {
 	return string(b)
 }
 
-// @BasePath /api/v1
+// @title TON Emulate API
+// @version 0.0.1
+// @description	TON Emulate API emulates trace by external message.
+// @basePath /emulate
 
 // EmulateTrace godoc
 // @Summary Emulate trace by external message
@@ -58,15 +72,17 @@ func generateTaskID() string {
 // @Produce json
 // @Param   boc     body    object     true        "External Message BOC"
 // @Success 200 {string} Helloworld
-// @Router /emulateTrace [post]
-func emulateTrace(c *gin.Context) {
+// @Router /v1/emulateTrace [post]
+func emulateTrace(c *fiber.Ctx) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
 	var req EmulateRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid request"})
-		return
+	if err := c.BodyParser(&req); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid request: "+err.Error())
+	}
+	if err := req.Validate(); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "invalid request: "+err.Error())
 	}
 
 	taskID := generateTaskID()
@@ -80,10 +96,8 @@ func emulateTrace(c *gin.Context) {
 	enc := msgpack.NewEncoder(&buf)
 	enc.UseArrayEncodedStructs(false)
 
-	err := enc.Encode(task)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to serialize task"})
-		return
+	if err := enc.Encode(task); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "failed to serialize task: "+err.Error())
 	}
 
 	// Initialize Redis client
@@ -93,8 +107,7 @@ func emulateTrace(c *gin.Context) {
 
 	// Push the packed task to the Redis queue
 	if err := rdb.LPush(ctx, *queueName, buf.Bytes()).Err(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to push task to Redis"})
-		return
+		return fiber.NewError(fiber.StatusInternalServerError, "failed to push task to Redis: "+err.Error())
 	}
 
 	// Subscribe to the result channel
@@ -104,50 +117,72 @@ func emulateTrace(c *gin.Context) {
 	// Wait for the result
 	msg, err := pubsub.ReceiveMessage(ctx)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to receive result from Redis: " + err.Error()})
-		return
+		return fiber.NewError(fiber.StatusInternalServerError, "failed to receive result from Redis: "+err.Error())
 	}
 
 	if msg.Payload == "error" {
 		error_msg, err := rdb.Get(ctx, "error_channel_"+taskID).Result()
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to receive result from Redis: " + err.Error()})
+			return fiber.NewError(fiber.StatusInternalServerError, "failed to receive error from Redis: "+err.Error())
 		}
-		c.JSON(http.StatusInternalServerError, gin.H{"error": error_msg})
-		return
+		return fiber.NewError(fiber.StatusInternalServerError, error_msg)
 	}
 	if msg.Payload != "success" {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "unexpected message from Redis"})
-		return
+		return fiber.NewError(fiber.StatusInternalServerError, "unexpected message from Redis: "+msg.Payload)
 	}
 
 	hset, err := rdb.HGetAll(ctx, "result_hset_"+taskID).Result()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to receive result from Redis: " + err.Error()})
-		return
+		return fiber.NewError(fiber.StatusInternalServerError, "failed to get result from Redis: "+err.Error())
 	}
 
 	result, err := models.TransformToAPIResponse(hset)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to transform result to API response " + err.Error()})
-		return
+		return fiber.NewError(fiber.StatusInternalServerError, "failed to transform result: "+err.Error())
 	}
-	c.JSON(http.StatusOK, result)
+
+	return c.Status(200).JSON(result)
 }
 
 func main() {
 	flag.Parse()
 
-	r := gin.Default()
-
-	docs.SwaggerInfo.BasePath = "/api/v1"
-	v1 := r.Group("/api/v1")
-	{
-		v1.POST("/emulateTrace", emulateTrace)
+	config := fiber.Config{
+		AppName:        "TON Index API",
+		Concurrency:    256 * 1024,
+		Prefork:        *prefork,
+		ReadBufferSize: 1048576,
 	}
+	app := fiber.New(config)
 
-	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
+	app.Use(func(c *fiber.Ctx) error {
+		err := c.Next()
+		if err != nil {
+			// Log the error internally here if necessary
 
-	port := fmt.Sprintf(":%d", *serverPort)
-	r.Run(port)
+			// Return a JSON response with the error
+			code := fiber.StatusInternalServerError
+			if e, ok := err.(*fiber.Error); ok {
+				code = e.Code
+			}
+
+			return c.Status(code).JSON(fiber.Map{
+				"error": err.Error(),
+			})
+		}
+		return nil
+	})
+
+	app.Post("/emulate/v1/emulateTrace", emulateTrace)
+
+	var swagger_config = swagger.Config{
+		Title:           "TON Emulate API - Swagger UI",
+		Layout:          "BaseLayout",
+		DeepLinking:     true,
+		TryItOutEnabled: true,
+	}
+	app.Get("/emulate/*", swagger.New(swagger_config))
+	bind := fmt.Sprintf(":%d", *serverPort)
+	err := app.Listen(bind)
+	log.Fatal(err)
 }

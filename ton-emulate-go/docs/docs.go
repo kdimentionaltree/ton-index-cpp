@@ -15,7 +15,7 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/emulateTrace": {
+        "/v1/emulateTrace": {
             "post": {
                 "description": "Emulate trace by external message.",
                 "consumes": [
@@ -54,12 +54,12 @@ const docTemplate = `{
 
 // SwaggerInfo holds exported Swagger Info so clients can modify it
 var SwaggerInfo = &swag.Spec{
-	Version:          "",
+	Version:          "0.0.1",
 	Host:             "",
-	BasePath:         "/api/v1",
+	BasePath:         "/emulate",
 	Schemes:          []string{},
-	Title:            "",
-	Description:      "",
+	Title:            "TON Emulate API",
+	Description:      "TON Emulate API emulates trace by external message.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

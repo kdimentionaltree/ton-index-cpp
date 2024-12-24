@@ -1,11 +1,14 @@
 {
     "swagger": "2.0",
     "info": {
-        "contact": {}
+        "description": "TON Emulate API emulates trace by external message.",
+        "title": "TON Emulate API",
+        "contact": {},
+        "version": "0.0.1"
     },
-    "basePath": "/api/v1",
+    "basePath": "/emulate",
     "paths": {
-        "/emulateTrace": {
+        "/v1/emulateTrace": {
             "post": {
                 "description": "Emulate trace by external message.",
                 "consumes": [

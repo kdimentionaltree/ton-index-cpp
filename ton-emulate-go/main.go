@@ -3,6 +3,8 @@ package main
 import (
 	"bytes"
 	"context"
+	"flag"
+	"fmt"
 	"math/rand"
 	"net/http"
 	"time"
@@ -27,6 +29,13 @@ type TraceTask struct {
 type EmulateRequest struct {
 	Boc string `json:"boc"`
 }
+
+// Command-line flags
+var (
+	redisAddr  = flag.String("redis", "localhost:6379", "Redis server dsn")
+	queueName  = flag.String("redis-queue", "somequeue", "Redis queue name")
+	serverPort = flag.Int("port", 8080, "Server port")
+)
 
 func generateTaskID() string {
 	rand.Seed(time.Now().UnixNano())
@@ -79,11 +88,11 @@ func emulateTrace(c *gin.Context) {
 
 	// Initialize Redis client
 	rdb := redis.NewClient(&redis.Options{
-		Addr: "localhost:6379", // Redis server address
+		Addr: *redisAddr, // Redis server address
 	})
 
 	// Push the packed task to the Redis queue
-	if err := rdb.LPush(ctx, "somequeue", buf.Bytes()).Err(); err != nil {
+	if err := rdb.LPush(ctx, *queueName, buf.Bytes()).Err(); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to push task to Redis"})
 		return
 	}
@@ -127,6 +136,8 @@ func emulateTrace(c *gin.Context) {
 }
 
 func main() {
+	flag.Parse()
+
 	r := gin.Default()
 
 	docs.SwaggerInfo.BasePath = "/api/v1"
@@ -136,5 +147,7 @@ func main() {
 	}
 
 	r.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerfiles.Handler))
-	r.Run(":8080")
+
+	port := fmt.Sprintf(":%d", *serverPort)
+	r.Run(port)
 }

@@ -35,7 +35,7 @@ const docTemplate = `{
                         "in": "body",
                         "required": true,
                         "schema": {
-                            "type": "object"
+                            "$ref": "#/definitions/main.EmulateRequest"
                         }
                     }
                 ],
@@ -46,6 +46,17 @@ const docTemplate = `{
                             "type": "string"
                         }
                     }
+                }
+            }
+        }
+    },
+    "definitions": {
+        "main.EmulateRequest": {
+            "type": "object",
+            "properties": {
+                "boc": {
+                    "type": "string",
+                    "example": "te6ccgEBAQEAAgAAAA=="
                 }
             }
         }

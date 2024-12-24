@@ -28,7 +28,7 @@ type TraceTask struct {
 }
 
 type EmulateRequest struct {
-	Boc string `json:"boc" validate:"required"`
+	Boc string `json:"boc" example:"te6ccgEBAQEAAgAAAA=="`
 }
 
 // validate function for EmulateRequest
@@ -70,7 +70,7 @@ func generateTaskID() string {
 // @Tags emulate
 // @Accept json
 // @Produce json
-// @Param   boc     body    object     true        "External Message BOC"
+// @Param   boc     body    EmulateRequest     true        "External Message BOC"
 // @Success 200 {string} Helloworld
 // @Router /v1/emulateTrace [post]
 func emulateTrace(c *fiber.Ctx) error {

@@ -1,4 +1,11 @@
 basePath: /emulate
+definitions:
+  main.EmulateRequest:
+    properties:
+      boc:
+        example: te6ccgEBAQEAAgAAAA==
+        type: string
+    type: object
 info:
   contact: {}
   description: TON Emulate API emulates trace by external message.
@@ -16,7 +23,7 @@ paths:
         name: boc
         required: true
         schema:
-          type: object
+          $ref: '#/definitions/main.EmulateRequest'
       produces:
       - application/json
       responses:

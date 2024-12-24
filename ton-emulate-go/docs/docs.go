@@ -57,6 +57,10 @@ const docTemplate = `{
                 "boc": {
                     "type": "string",
                     "example": "te6ccgEBAQEAAgAAAA=="
+                },
+                "ignore_chksig": {
+                    "type": "boolean",
+                    "example": false
                 }
             }
         }

@@ -5,6 +5,9 @@ definitions:
       boc:
         example: te6ccgEBAQEAAgAAAA==
         type: string
+      ignore_chksig:
+        example: false
+        type: boolean
     type: object
 info:
   contact: {}

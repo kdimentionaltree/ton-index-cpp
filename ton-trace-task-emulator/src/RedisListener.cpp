@@ -5,8 +5,9 @@
 struct TraceTask {
   std::string id;
   std::string boc;
+  bool ignore_chksig;
 
-  MSGPACK_DEFINE(id, boc);
+  MSGPACK_DEFINE(id, boc, ignore_chksig);
 };
 
 void RedisListener::start_up() {
@@ -59,7 +60,7 @@ void RedisListener::alarm() {
         td::actor::send_closure(SelfId, &RedisListener::trace_received, std::move(task_id), std::move(mc_blkid), R.move_as_ok());
       }
     });
-    td::actor::create_actor<TraceEmulator>("TraceEmu", mc_data_state_, msg_cell, false, std::move(P)).release();
+    td::actor::create_actor<TraceEmulator>("TraceEmu", mc_data_state_, msg_cell, task.ignore_chksig, std::move(P)).release();
   }
 
   alarm_timestamp() = td::Timestamp::now();

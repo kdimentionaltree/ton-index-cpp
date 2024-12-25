@@ -51,7 +51,6 @@ var (
 )
 
 func generateTaskID() string {
-	rand.Seed(time.Now().UnixNano())
 	const letters = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 	b := make([]byte, 10)
 	for i := range b {
@@ -62,7 +61,7 @@ func generateTaskID() string {
 
 // @title TON Emulate API
 // @version 0.0.1
-// @description	TON Emulate API emulates trace by external message.
+// @description	TON Emulate API provides an endpoint to emulate transactions and traces before committing them to the blockchain.
 // @basePath /emulate
 
 // EmulateTrace godoc
@@ -72,8 +71,7 @@ func generateTaskID() string {
 // @Tags emulate
 // @Accept json
 // @Produce json
-// @Param   boc     body    EmulateRequest     true        "External Message BOC"
-// @Success 200 {string} Helloworld
+// @Param   request     body    EmulateRequest     true        "External Message Request"
 // @Router /v1/emulateTrace [post]
 func emulateTrace(c *fiber.Ctx) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)

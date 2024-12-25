@@ -11,7 +11,8 @@ definitions:
     type: object
 info:
   contact: {}
-  description: TON Emulate API emulates trace by external message.
+  description: TON Emulate API provides an endpoint to emulate transactions and traces
+    before committing them to the blockchain.
   title: TON Emulate API
   version: 0.0.1
 paths:
@@ -21,19 +22,15 @@ paths:
       - application/json
       description: Emulate trace by external message.
       parameters:
-      - description: External Message BOC
+      - description: External Message Request
         in: body
-        name: boc
+        name: request
         required: true
         schema:
           $ref: '#/definitions/main.EmulateRequest'
       produces:
       - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            type: string
+      responses: {}
       summary: Emulate trace by external message
       tags:
       - emulate

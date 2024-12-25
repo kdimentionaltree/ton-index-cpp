@@ -30,8 +30,8 @@ const docTemplate = `{
                 "summary": "Emulate trace by external message",
                 "parameters": [
                     {
-                        "description": "External Message BOC",
-                        "name": "boc",
+                        "description": "External Message Request",
+                        "name": "request",
                         "in": "body",
                         "required": true,
                         "schema": {
@@ -39,14 +39,7 @@ const docTemplate = `{
                         }
                     }
                 ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "type": "string"
-                        }
-                    }
-                }
+                "responses": {}
             }
         }
     },
@@ -74,7 +67,7 @@ var SwaggerInfo = &swag.Spec{
 	BasePath:         "/emulate",
 	Schemes:          []string{},
 	Title:            "TON Emulate API",
-	Description:      "TON Emulate API emulates trace by external message.",
+	Description:      "TON Emulate API provides an endpoint to emulate transactions and traces before committing them to the blockchain.",
 	InfoInstanceName: "swagger",
 	SwaggerTemplate:  docTemplate,
 	LeftDelim:        "{{",

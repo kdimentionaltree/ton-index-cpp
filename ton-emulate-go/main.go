@@ -62,7 +62,7 @@ func generateTaskID() string {
 // @title TON Emulate API
 // @version 0.0.1
 // @description	TON Emulate API provides an endpoint to emulate transactions and traces before committing them to the blockchain.
-// @basePath /emulate
+// @basePath /api/emulate/
 
 // EmulateTrace godoc
 // @Summary Emulate trace by external message
@@ -174,7 +174,7 @@ func main() {
 		return nil
 	})
 
-	app.Post("/emulate/v1/emulateTrace", emulateTrace)
+	app.Post("/api/emulate/v1/emulateTrace", emulateTrace)
 
 	var swagger_config = swagger.Config{
 		Title:           "TON Emulate API - Swagger UI",
@@ -182,7 +182,7 @@ func main() {
 		DeepLinking:     true,
 		TryItOutEnabled: true,
 	}
-	app.Get("/emulate/*", swagger.New(swagger_config))
+	app.Get("/api/emulate/*", swagger.New(swagger_config))
 	bind := fmt.Sprintf(":%d", *serverPort)
 	err := app.Listen(bind)
 	log.Fatal(err)

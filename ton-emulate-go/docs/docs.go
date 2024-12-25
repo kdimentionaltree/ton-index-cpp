@@ -64,7 +64,7 @@ const docTemplate = `{
 var SwaggerInfo = &swag.Spec{
 	Version:          "0.0.1",
 	Host:             "",
-	BasePath:         "/emulate",
+	BasePath:         "/api/emulate/",
 	Schemes:          []string{},
 	Title:            "TON Emulate API",
 	Description:      "TON Emulate API provides an endpoint to emulate transactions and traces before committing them to the blockchain.",

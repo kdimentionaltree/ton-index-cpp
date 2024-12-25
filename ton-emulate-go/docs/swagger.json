@@ -6,7 +6,7 @@
         "contact": {},
         "version": "0.0.1"
     },
-    "basePath": "/emulate",
+    "basePath": "/api/emulate/",
     "paths": {
         "/v1/emulateTrace": {
             "post": {

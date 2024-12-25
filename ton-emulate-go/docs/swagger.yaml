@@ -1,4 +1,4 @@
-basePath: /emulate
+basePath: /api/emulate/
 definitions:
   main.EmulateRequest:
     properties:

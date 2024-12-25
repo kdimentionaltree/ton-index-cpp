@@ -28,7 +28,7 @@ void OverlayListener::start_up() {
                 return;
             }
             
-            promise.set_value(ton::create_serialize_tl_object<ton::ton_api::tonNode_capabilities>(0, 0));
+            promise.set_value(ton::create_serialize_tl_object<ton::ton_api::tonNode_capabilities>(0, 0, 0));
         }
         void receive_broadcast(ton::PublicKeyHash src, ton::overlay::OverlayIdShort overlay_id, td::BufferSlice data) override {
             auto B = ton::fetch_tl_object<ton::ton_api::tonNode_externalMessageBroadcast>(std::move(data), true);

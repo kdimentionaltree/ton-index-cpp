@@ -351,18 +351,6 @@ std::string InsertManagerPostgres::Credential::get_connection_string(std::string
 
 
 template <>
-struct std::hash<td::Bits256>
-{
-  std::size_t operator()(const td::Bits256& k) const {
-    std::size_t seed = 0;
-    for(const auto& el : k.as_array()) {
-        seed ^= std::hash<td::uint8>{}(el) + 0x9e3779b9 + (seed << 6) + (seed >> 2);
-    }
-    return seed;
-  }
-};
-
-template <>
 struct std::hash<std::pair<td::Bits256, td::Bits256>>
 {
   std::size_t operator()(const std::pair<td::Bits256, td::Bits256>& k) const {

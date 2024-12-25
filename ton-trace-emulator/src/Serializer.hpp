@@ -757,7 +757,7 @@ td::Result<AccountState> parse_account(const block::Account& account) {
     TRY_RESULT(schema_account, ParseQuery::parse_account(account.total_state, account.now_, account.last_trans_hash_, account.last_trans_lt_));
     result.hash = schema_account.hash;
     result.timestamp = schema_account.timestamp;
-    result.balance = schema_account.balance;
+    result.balance = schema_account.balance.grams->to_long();
     result.account_status = schema_account.account_status;
     result.frozen_hash = schema_account.frozen_hash;
     result.code_hash = schema_account.code_hash;

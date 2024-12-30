@@ -60,6 +60,7 @@ public:
         trace_node->emulated = false;
         trace_node->transaction_root = tx.root;
         trace_node->node_id = tx.in_msg_hash;
+        trace_node->address = tx.account;
 
         td::MultiPromise mp;
         auto ig = mp.init_guard();

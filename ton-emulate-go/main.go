@@ -31,6 +31,7 @@ type TraceTask struct {
 type EmulateRequest struct {
 	Boc          string `json:"boc" example:"te6ccgEBAQEAAgAAAA=="`
 	IgnoreChksig bool   `json:"ignore_chksig" example:"false"`
+	WithActions  bool   `json:"with_actions" example:"true"`
 }
 
 // validate function for EmulateRequest
@@ -44,10 +45,11 @@ func (req EmulateRequest) Validate() error {
 
 // Command-line flags
 var (
-	redisAddr  = flag.String("redis", "localhost:6379", "Redis server dsn")
-	queueName  = flag.String("redis-queue", "somequeue", "Redis queue name")
-	serverPort = flag.Int("port", 8080, "Server port")
-	prefork    = flag.Bool("prefork", false, "Use prefork")
+	redisAddr         = flag.String("redis", "localhost:6379", "Redis server dsn")
+	emulatorQueueName = flag.String("emulator-queue", "emulatorqueue", "Redis queue name")
+	classifierChannel = flag.String("classifier-channel", "classifierchannel", "Redis queue name")
+	serverPort        = flag.Int("port", 8080, "Server port")
+	prefork           = flag.Bool("prefork", false, "Use prefork")
 )
 
 func generateTaskID() string {
@@ -107,32 +109,56 @@ func emulateTrace(c *fiber.Ctx) error {
 	})
 
 	// Push the packed task to the Redis queue
-	if err := rdb.LPush(ctx, *queueName, buf.Bytes()).Err(); err != nil {
-		return fiber.NewError(fiber.StatusInternalServerError, "failed to push task to Redis: "+err.Error())
+	if err := rdb.LPush(ctx, *emulatorQueueName, buf.Bytes()).Err(); err != nil {
+		return fiber.NewError(fiber.StatusInternalServerError, "failed to push task to emulator queue: "+err.Error())
 	}
 
 	// Subscribe to the result channel
-	pubsub := rdb.Subscribe(ctx, "result_channel_"+taskID)
+	pubsub := rdb.Subscribe(ctx, "emulator_channel_"+taskID)
 	defer pubsub.Close()
 
 	// Wait for the result
 	msg, err := pubsub.ReceiveMessage(ctx)
 	if err != nil {
-		return fiber.NewError(fiber.StatusInternalServerError, "failed to receive result from Redis: "+err.Error())
+		return fiber.NewError(fiber.StatusInternalServerError, "failed to receive result from emulator channel: "+err.Error())
 	}
 
 	if msg.Payload == "error" {
-		error_msg, err := rdb.Get(ctx, "error_channel_"+taskID).Result()
+		error_msg, err := rdb.Get(ctx, "emulator_error_"+taskID).Result()
 		if err != nil {
-			return fiber.NewError(fiber.StatusInternalServerError, "failed to receive error from Redis: "+err.Error())
+			return fiber.NewError(fiber.StatusInternalServerError, "failed to receive error from emulator error: "+err.Error())
 		}
 		return fiber.NewError(fiber.StatusInternalServerError, error_msg)
 	}
 	if msg.Payload != "success" {
-		return fiber.NewError(fiber.StatusInternalServerError, "unexpected message from Redis: "+msg.Payload)
+		return fiber.NewError(fiber.StatusInternalServerError, "unexpected message from emulator channel: "+msg.Payload)
 	}
 
-	hset, err := rdb.HGetAll(ctx, "result_hset_"+taskID).Result()
+	if req.WithActions {
+		// publish task id to classifier channel
+		if err := rdb.Publish(ctx, *classifierChannel, taskID).Err(); err != nil {
+			return fiber.NewError(fiber.StatusInternalServerError, "failed to publish task id to classifier queue: "+err.Error())
+		}
+		// wait for the notification in channel classifier_result_channel_taskID
+		pubsub := rdb.Subscribe(ctx, "classifier_result_channel_"+taskID)
+		defer pubsub.Close()
+		msg, err := pubsub.ReceiveMessage(ctx)
+		if err != nil {
+			return fiber.NewError(fiber.StatusInternalServerError, "failed to receive result from classifier channel: "+err.Error())
+		}
+		if msg.Payload == "error" {
+			error_msg, err := rdb.Get(ctx, "classifier_error_"+taskID).Result()
+			if err != nil {
+				return fiber.NewError(fiber.StatusInternalServerError, "failed to receive error from classifier error: "+err.Error())
+			}
+			return fiber.NewError(fiber.StatusInternalServerError, error_msg)
+		}
+		if msg.Payload != "success" {
+			return fiber.NewError(fiber.StatusInternalServerError, "unexpected message from classifier result channel: "+msg.Payload)
+		}
+	}
+
+	hset, err := rdb.HGetAll(ctx, "result_"+taskID).Result()
 	if err != nil {
 		return fiber.NewError(fiber.StatusInternalServerError, "failed to get result from Redis: "+err.Error())
 	}
@@ -172,6 +198,15 @@ func main() {
 			})
 		}
 		return nil
+	})
+
+	app.Use("/api/emulate/", func(c *fiber.Ctx) error {
+		c.Accepts("application/json")
+		start := time.Now()
+		err := c.Next()
+		stop := time.Now()
+		c.Append("Server-timing", fmt.Sprintf("app;dur=%v", stop.Sub(start).String()))
+		return err
 	})
 
 	app.Post("/api/emulate/v1/emulateTrace", emulateTrace)

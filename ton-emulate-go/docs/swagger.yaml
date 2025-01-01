@@ -8,6 +8,9 @@ definitions:
       ignore_chksig:
         example: false
         type: boolean
+      with_actions:
+        example: true
+        type: boolean
     type: object
 info:
   contact: {}

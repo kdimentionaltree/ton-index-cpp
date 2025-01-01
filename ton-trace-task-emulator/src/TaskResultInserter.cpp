@@ -14,11 +14,11 @@ public:
     }
 
     void start_up() override {
-        auto result_channel = "result_channel_" + result_.task_id;
+        auto result_channel = "emulator_channel_" + result_.task_id;
         try {
             if (result_.trace.is_error()) {
-                transaction_.set("error_channel_" + result_.task_id, result_.trace.error().message().str());
-                transaction_.expire("error_channel_" + result_.task_id, 60);
+                transaction_.set("emulator_error_" + result_.task_id, result_.trace.error().message().str());
+                transaction_.expire("emulator_error_" + result_.task_id, 60);
                 transaction_.publish(result_channel, "error");
                 transaction_.exec();
                 promise_.set_value(td::Unit());
@@ -61,10 +61,10 @@ public:
                 std::stringstream buffer;
                 msgpack::pack(buffer, std::move(node));
 
-                transaction_.hset("result_hset_" + result_.task_id, td::base64_encode(node.transaction.in_msg.value().hash.as_slice()), buffer.str());
+                transaction_.hset("result_" + result_.task_id, td::base64_encode(node.transaction.in_msg.value().hash.as_slice()), buffer.str());
             }
-            transaction_.hset("result_hset_" + result_.task_id, "root_node", td::base64_encode(result_.trace.ok().id.as_slice()));
-            transaction_.hset("result_hset_" + result_.task_id, "mc_block_id", result_.mc_block_id.to_str());
+            transaction_.hset("result_" + result_.task_id, "root_node", td::base64_encode(result_.trace.ok().id.as_slice()));
+            transaction_.hset("result_" + result_.task_id, "mc_block_id", result_.mc_block_id.to_str());
 
             std::unordered_map<td::Bits256, AccountState> account_states;
             for (const auto& [addr, account] : trace.emulated_accounts) {
@@ -78,9 +78,17 @@ public:
             }
             std::stringstream buffer;
             msgpack::pack(buffer, account_states);
-            transaction_.hset("result_hset_" + result_.task_id, "account_states", buffer.str());
+            transaction_.hset("result_" + result_.task_id, "account_states", buffer.str());
 
-            transaction_.expire("result_hset_" + result_.task_id, 60);
+            for (const auto& [addr, interfaces] : trace.interfaces) {
+                auto interfaces_redis = parse_interfaces(interfaces);
+                std::stringstream buffer;
+                msgpack::pack(buffer, interfaces_redis);
+                auto addr_raw = std::to_string(addr.workchain) + ":" + addr.addr.to_hex();
+                transaction_.hset("result_" + result_.task_id, addr_raw, buffer.str());
+            }
+
+            transaction_.expire("result_" + result_.task_id, 60);
 
             transaction_.publish(result_channel, "success");
             transaction_.exec();

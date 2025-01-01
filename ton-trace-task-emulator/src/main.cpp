@@ -22,7 +22,7 @@ int main(int argc, char *argv[]) {
   std::string working_dir;
   td::uint32 threads = 7;
   std::string redis_dsn = "tcp://127.0.0.1:6379";
-  std::string redis_queue_name = "";
+  std::string redis_queue_name = "emulatorqueue";
   
   td::OptionParser p;
   p.set_description("Emulate TON traces");

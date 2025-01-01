@@ -9,7 +9,14 @@ void TraceInterfaceDetector::start_up() {
     });
     ig.add_promise(std::move(P));
 
-    for (auto& [address, account] : trace_.emulated_accounts) {
+    // Detect interfaces for final state of each account
+    std::unordered_set<block::StdAddress> processed_addresses;
+    for (auto it = trace_.emulated_accounts.rbegin(); it != trace_.emulated_accounts.rend(); it++) {
+        const auto& [address, account] = *it;
+        if (processed_addresses.count(address)) {
+            continue;
+        }
+        processed_addresses.insert(address);
         trace_.interfaces[address] = {};
         td::actor::create_actor<Trace::Detector>
             ("InterfacesDetector", address, account.code, account.data, shard_states_, config_, 

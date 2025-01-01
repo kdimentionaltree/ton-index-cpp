@@ -146,21 +146,31 @@ type TrBouncePhaseOk struct {
 }
 
 type Message struct {
-	Hash         Hash    `msgpack:"hash" json:"hash"`
-	Source       *string `msgpack:"source" json:"source"`
-	Destination  *string `msgpack:"destination" json:"destination"`
-	Value        *uint64 `msgpack:"value" json:"value"`
-	FwdFee       *uint64 `msgpack:"fwd_fee" json:"fwd_fee"`
-	IhrFee       *uint64 `msgpack:"ihr_fee" json:"ihr_fee"`
-	CreatedLt    *uint64 `msgpack:"created_lt" json:"created_lt"`
-	CreatedAt    *uint32 `msgpack:"created_at" json:"created_at"`
-	Opcode       *int32  `msgpack:"opcode" json:"opcode"`
-	IhrDisabled  *bool   `msgpack:"ihr_disabled" json:"ihr_disabled"`
-	Bounce       *bool   `msgpack:"bounce" json:"bounce"`
-	Bounced      *bool   `msgpack:"bounced" json:"bounced"`
-	ImportFee    *uint64 `msgpack:"import_fee" json:"import_fee"`
-	BodyBoc      string  `msgpack:"body_boc" json:"body_boc"`
-	InitStateBoc *string `msgpack:"init_state_boc" json:"init_state_boc"`
+	Hash         Hash        `msgpack:"hash" json:"hash"`
+	Source       *string     `msgpack:"source" json:"source"`
+	Destination  *string     `msgpack:"destination" json:"destination"`
+	Value        *uint64     `msgpack:"value" json:"value"`
+	FwdFee       *uint64     `msgpack:"fwd_fee" json:"fwd_fee"`
+	IhrFee       *uint64     `msgpack:"ihr_fee" json:"ihr_fee"`
+	CreatedLt    *uint64     `msgpack:"created_lt" json:"created_lt,string"`
+	CreatedAt    *uint32     `msgpack:"created_at" json:"created_at"`
+	Opcode       *OpcodeType `msgpack:"opcode" json:"opcode"`
+	IhrDisabled  *bool       `msgpack:"ihr_disabled" json:"ihr_disabled"`
+	Bounce       *bool       `msgpack:"bounce" json:"bounce"`
+	Bounced      *bool       `msgpack:"bounced" json:"bounced"`
+	ImportFee    *uint64     `msgpack:"import_fee" json:"import_fee"`
+	BodyBoc      string      `msgpack:"body_boc" json:"body_boc"`
+	InitStateBoc *string     `msgpack:"init_state_boc" json:"init_state_boc"`
+}
+
+type OpcodeType int32 // @name OpcodeType
+
+func (v *OpcodeType) String() string {
+	return fmt.Sprintf("0x%08x", uint32(*v))
+}
+
+func (v *OpcodeType) MarshalJSON() ([]byte, error) {
+	return []byte(fmt.Sprintf("\"%s\"", v.String())), nil
 }
 
 type TransactionDescr struct {
@@ -331,7 +341,7 @@ type AccountState struct {
 	DataBoc       *string `msgpack:"data_boc" json:"data_boc"`
 	DataHash      *Hash   `msgpack:"data_hash" json:"data_hash"`
 	LastTransHash *Hash   `msgpack:"last_trans_hash" json:"last_trans_hash"`
-	LastTransLt   *uint64 `msgpack:"last_trans_lt" json:"last_trans_lt"`
+	LastTransLt   *uint64 `msgpack:"last_trans_lt" json:"last_trans_lt,string"`
 	Timestamp     *uint32 `msgpack:"timestamp" json:"timestamp"`
 }
 

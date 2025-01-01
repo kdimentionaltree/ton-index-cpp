@@ -54,6 +54,10 @@ const docTemplate = `{
                 "ignore_chksig": {
                     "type": "boolean",
                     "example": false
+                },
+                "with_actions": {
+                    "type": "boolean",
+                    "example": true
                 }
             }
         }

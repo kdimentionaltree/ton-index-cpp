@@ -175,8 +175,8 @@ func (v *OpcodeType) MarshalJSON() ([]byte, error) {
 
 type TransactionDescr struct {
 	CreditFirst bool            `msgpack:"credit_first" json:"credit_first"`
-	StoragePh   TrStoragePhase  `msgpack:"storage_ph" json:"storage_ph"`
-	CreditPh    TrCreditPhase   `msgpack:"credit_ph" json:"credit_ph"`
+	StoragePh   *TrStoragePhase `msgpack:"storage_ph" json:"storage_ph"`
+	CreditPh    *TrCreditPhase  `msgpack:"credit_ph" json:"credit_ph"`
 	ComputePh   ComputePhaseVar `msgpack:"compute_ph" json:"compute_ph"`
 	Action      *TrActionPhase  `msgpack:"action" json:"action"`
 	Aborted     bool            `msgpack:"aborted" json:"aborted"`

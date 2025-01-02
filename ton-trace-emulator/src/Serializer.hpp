@@ -750,6 +750,7 @@ td::Result<AccountState> parse_account(const block::Account& account) {
   switch (account_tag) {
   case block::gen::Account::account_none: {
     result.account_status = "nonexist";
+    result.balance = 0;
     result.hash = account.total_state->get_hash().bits();
     break;
   }

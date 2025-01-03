@@ -64,7 +64,8 @@ public:
                 transaction_.hset("result_" + result_.task_id, td::base64_encode(node.transaction.in_msg.value().hash.as_slice()), buffer.str());
             }
             transaction_.hset("result_" + result_.task_id, "root_node", td::base64_encode(result_.trace.ok().id.as_slice()));
-            transaction_.hset("result_" + result_.task_id, "mc_block_id", result_.mc_block_id.to_str());
+            transaction_.hset("result_" + result_.task_id, "mc_block_seqno", std::to_string(result_.mc_block_id.seqno));
+            transaction_.hset("result_" + result_.task_id, "rand_seed", td::base64_encode(result_.trace.ok().rand_seed.as_slice()));
 
             std::unordered_map<td::Bits256, AccountState> account_states;
             for (const auto& [addr, account] : trace.emulated_accounts) {

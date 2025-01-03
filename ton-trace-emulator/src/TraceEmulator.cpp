@@ -2,6 +2,7 @@
 #include <sstream>
 #include <string>
 #include <emulator/transaction-emulator.h>
+#include "crypto/openssl/rand.hpp"
 #include "TraceEmulator.h"
 
 td::Result<block::StdAddress> fetch_msg_dest_address(td::Ref<vm::Cell> msg, int& type) {
@@ -194,6 +195,11 @@ void TraceEmulatorImpl::child_error(TraceNode *trace, td::Status error) {
     delete trace;
 }
 
+TraceEmulator::TraceEmulator(MasterchainBlockDataState mc_data_state, td::Ref<vm::Cell> in_msg, bool ignore_chksig, td::Promise<Trace> promise)
+    : mc_data_state_(std::move(mc_data_state)), in_msg_(std::move(in_msg)), ignore_chksig_(ignore_chksig), promise_(std::move(promise)) {
+    prng::rand_gen().strong_rand_bytes(rand_seed_.data(), 32);
+}
+
 void TraceEmulator::start_up() {
     std::vector<td::Ref<vm::Cell>> shard_states;
     for (const auto& shard_state : mc_data_state_.shard_blocks_) {
@@ -226,6 +232,7 @@ void TraceEmulator::finish(td::Result<TraceNode *> root) {
     Trace result;
     result.id = in_msg_->get_hash().bits();
     result.root = std::unique_ptr<TraceNode>(root.move_as_ok());
+    result.rand_seed = rand_seed_;
     result.emulated_accounts = std::move(emulated_accounts_);
     promise_.set_result(std::move(result));
     stop();

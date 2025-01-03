@@ -9,9 +9,10 @@ type TraceNodeShort struct {
 }
 
 type EmulateTraceResponse struct {
-	McBlockID     string                 `json:"mc_block_id"`
+	McBlockSeqno  uint32                 `json:"mc_block_seqno"`
 	Trace         TraceNodeShort         `json:"trace"`
 	Transactions  map[Hash]*Transaction  `json:"transactions"`
 	AccountStates map[Hash]*AccountState `json:"account_states"`
 	Actions       *[]tonindexgo.Action   `json:"actions,omitempty"`
+	RandSeed      string                 `json:"rand_seed"`
 }

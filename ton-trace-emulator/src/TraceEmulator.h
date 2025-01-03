@@ -63,6 +63,7 @@ struct TraceNode {
 struct Trace {
     TraceId id;
     std::unique_ptr<TraceNode> root;
+    td::Bits256 rand_seed;
 
     using Detector = InterfacesDetector<JettonWalletDetectorR, JettonMasterDetectorR, 
                                         NftItemDetectorR, NftCollectionDetectorR,
@@ -121,15 +122,14 @@ private:
     td::Ref<vm::Cell> in_msg_;
     bool ignore_chksig_;
     td::Promise<Trace> promise_;
+    td::Bits256 rand_seed_;
 
     std::shared_ptr<emulator::TransactionEmulator> emulator_;
     std::multimap<block::StdAddress, block::Account, AddrCmp> emulated_accounts_;
     std::mutex emulated_accounts_mutex_;
     std::unordered_map<block::StdAddress, td::actor::ActorOwn<TraceEmulatorImpl>> emulator_actors_;
 public:
-    TraceEmulator(MasterchainBlockDataState mc_data_state, td::Ref<vm::Cell> in_msg, bool ignore_chksig, td::Promise<Trace> promise)
-        : mc_data_state_(std::move(mc_data_state)), in_msg_(std::move(in_msg)), ignore_chksig_(ignore_chksig), promise_(std::move(promise)) {
-    }
+    TraceEmulator(MasterchainBlockDataState mc_data_state, td::Ref<vm::Cell> in_msg, bool ignore_chksig, td::Promise<Trace> promise);
 
     void start_up() override;
     void finish(td::Result<TraceNode *> root);

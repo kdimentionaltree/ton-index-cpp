@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"strconv"
 	"strings"
 
 	tonindexgo "github.com/kdimentionaltree/ton-index-go/index"
@@ -95,12 +96,18 @@ func TransformToAPIResponse(hset map[string]string) (*EmulateTraceResponse, erro
 		actionsPointer = &goActions
 	}
 
+	mcBlockSeqno, err := strconv.ParseUint(hset["mc_block_seqno"], 10, 32)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert mc_block_seqno to int: %w", err)
+	}
+
 	response := EmulateTraceResponse{
-		McBlockID:     hset["mc_block_id"],
+		McBlockSeqno:  uint32(mcBlockSeqno),
 		Trace:         *shortTrace,
 		Transactions:  txMap,
 		AccountStates: accountStates,
 		Actions:       actionsPointer,
+		RandSeed:      hset["rand_seed"],
 	}
 	return &response, nil
 }

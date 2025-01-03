@@ -8,8 +8,11 @@ definitions:
       ignore_chksig:
         example: false
         type: boolean
+      include_code_data:
+        example: false
+        type: boolean
       with_actions:
-        example: true
+        example: false
         type: boolean
     type: object
 info:

@@ -338,7 +338,6 @@ type AccountState struct {
 	AccountStatus string  `msgpack:"account_status" json:"account_status"`
 	FrozenHash    *Hash   `msgpack:"frozen_hash" json:"frozen_hash"`
 	CodeHash      *Hash   `msgpack:"code_hash" json:"code_hash"`
-	DataBoc       *string `msgpack:"data_boc" json:"data_boc"`
 	DataHash      *Hash   `msgpack:"data_hash" json:"data_hash"`
 	LastTransHash *Hash   `msgpack:"last_trans_hash" json:"last_trans_hash"`
 	LastTransLt   *uint64 `msgpack:"last_trans_lt" json:"last_trans_lt,string"`

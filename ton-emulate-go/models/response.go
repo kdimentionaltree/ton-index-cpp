@@ -14,5 +14,7 @@ type EmulateTraceResponse struct {
 	Transactions  map[Hash]*Transaction  `json:"transactions"`
 	AccountStates map[Hash]*AccountState `json:"account_states"`
 	Actions       *[]tonindexgo.Action   `json:"actions,omitempty"`
+	CodeCells     *map[Hash]string       `json:"code_cells,omitempty"`
+	DataCells     *map[Hash]string       `json:"data_cells,omitempty"`
 	RandSeed      string                 `json:"rand_seed"`
 }

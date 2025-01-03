@@ -55,9 +55,13 @@ const docTemplate = `{
                     "type": "boolean",
                     "example": false
                 },
+                "include_code_data": {
+                    "type": "boolean",
+                    "example": false
+                },
                 "with_actions": {
                     "type": "boolean",
-                    "example": true
+                    "example": false
                 }
             }
         }

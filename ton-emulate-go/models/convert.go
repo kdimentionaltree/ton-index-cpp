@@ -101,12 +101,34 @@ func TransformToAPIResponse(hset map[string]string) (*EmulateTraceResponse, erro
 		return nil, fmt.Errorf("failed to convert mc_block_seqno to int: %w", err)
 	}
 
+	var codeCellsPointer *map[Hash]string
+	if codeCells, ok := hset["code_cells"]; ok {
+		var codeCellsMap map[Hash]string
+		err = msgpack.Unmarshal([]byte(codeCells), &codeCellsMap)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal code cells: %w", err)
+		}
+		codeCellsPointer = &codeCellsMap
+	}
+
+	var dataCellsPointer *map[Hash]string
+	if dataCells, ok := hset["data_cells"]; ok {
+		var dataCellsMap map[Hash]string
+		err = msgpack.Unmarshal([]byte(dataCells), &dataCellsMap)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal data cells: %w", err)
+		}
+		dataCellsPointer = &dataCellsMap
+	}
+
 	response := EmulateTraceResponse{
 		McBlockSeqno:  uint32(mcBlockSeqno),
 		Trace:         *shortTrace,
 		Transactions:  txMap,
 		AccountStates: accountStates,
 		Actions:       actionsPointer,
+		CodeCells:     codeCellsPointer,
+		DataCells:     dataCellsPointer,
 		RandSeed:      hset["rand_seed"],
 	}
 	return &response, nil

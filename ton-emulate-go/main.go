@@ -23,15 +23,18 @@ import (
 )
 
 type TraceTask struct {
-	ID           string `msgpack:"id"`
-	BOC          string `msgpack:"boc"`
-	IgnoreChksig bool   `msgpack:"ignore_chksig"`
+	ID               string `msgpack:"id"`
+	BOC              string `msgpack:"boc"`
+	IgnoreChksig     bool   `msgpack:"ignore_chksig"`
+	DetectInterfaces bool   `msgpack:"detect_interfaces"`
+	IncludeCodeData  bool   `msgpack:"include_code_data"`
 }
 
 type EmulateRequest struct {
-	Boc          string `json:"boc" example:"te6ccgEBAQEAAgAAAA=="`
-	IgnoreChksig bool   `json:"ignore_chksig" example:"false"`
-	WithActions  bool   `json:"with_actions" example:"true"`
+	Boc             string `json:"boc" example:"te6ccgEBAQEAAgAAAA=="`
+	IgnoreChksig    bool   `json:"ignore_chksig" example:"false"`
+	WithActions     bool   `json:"with_actions" example:"false"`
+	IncludeCodeData bool   `json:"include_code_data" example:"false"`
 }
 
 // validate function for EmulateRequest
@@ -89,9 +92,11 @@ func emulateTrace(c *fiber.Ctx) error {
 
 	taskID := generateTaskID()
 	task := TraceTask{
-		ID:           taskID,
-		BOC:          req.Boc,
-		IgnoreChksig: req.IgnoreChksig,
+		ID:               taskID,
+		BOC:              req.Boc,
+		IgnoreChksig:     req.IgnoreChksig,
+		DetectInterfaces: req.WithActions,
+		IncludeCodeData:  req.IncludeCodeData,
 	}
 
 	// Serialize the task using msgpack

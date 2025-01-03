@@ -734,14 +734,15 @@ struct AccountState {
   uint64_t balance;
   std::string account_status; // "uninit", "frozen", "active", "nonexist"
   std::optional<td::Bits256> frozen_hash;
+  td::Ref<vm::Cell> code_cell;
   std::optional<td::Bits256> code_hash;
-  std::optional<std::string> data_boc;
+  td::Ref<vm::Cell> data_cell;
   std::optional<td::Bits256> data_hash;
   std::optional<td::Bits256> last_trans_hash;
   std::optional<uint64_t> last_trans_lt;
   std::optional<uint32_t> timestamp;
 
-  MSGPACK_DEFINE(hash, timestamp, balance, account_status, frozen_hash, code_hash, data_boc, data_hash, last_trans_hash, last_trans_lt);
+  MSGPACK_DEFINE(hash, timestamp, balance, account_status, frozen_hash, code_hash, data_hash, last_trans_hash, last_trans_lt);
 };
 
 td::Result<AccountState> parse_account(const block::Account& account) {
@@ -761,8 +762,9 @@ td::Result<AccountState> parse_account(const block::Account& account) {
     result.balance = schema_account.balance.grams->to_long();
     result.account_status = schema_account.account_status;
     result.frozen_hash = schema_account.frozen_hash;
+    result.code_cell = schema_account.code;
     result.code_hash = schema_account.code_hash;
-    TRY_RESULT_ASSIGN(result.data_boc, convert::to_bytes(schema_account.data));
+    result.data_cell = schema_account.data;
     result.data_hash = schema_account.data_hash;
     result.last_trans_hash = schema_account.last_trans_hash;
     result.last_trans_lt = schema_account.last_trans_lt;

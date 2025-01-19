@@ -39,11 +39,17 @@ namespace msgpack {
     template <>
     struct convert<td::Bits256> {
       msgpack::object const& operator()(msgpack::object const& o, td::Bits256& v) const {
-        if (o.type != msgpack::type::BIN || o.via.bin.size != 32) {
-          throw msgpack::type_error();
+        if (o.type == msgpack::type::BIN || o.via.bin.size == 32) {
+          std::memcpy(v.data(), o.via.bin.ptr, 32);
+          return o;
         }
-        std::memcpy(v.data(), o.via.bin.ptr, 32);
-        return o;
+        // Previously td::Bits256 was serialized as a hex string. Keep this for compatibility.
+        if (o.type == msgpack::type::STR) {
+          std::string hex = o.as<std::string>();
+          if (v.from_hex(hex) < 0) throw std::runtime_error("Failed to deserialize td::Bits256");
+          return o;
+        }
+        throw msgpack::type_error();
       }
     };
 

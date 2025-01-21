@@ -2,6 +2,7 @@ package models
 
 import (
 	"encoding/base64"
+	"encoding/hex"
 	"fmt"
 	"strconv"
 
@@ -80,6 +81,13 @@ func TransformToAPIResponse(hset map[string]string) (*EmulateTraceResponse, erro
 		goActions := make([]tonindexgo.Action, 0, len(actions))
 
 		for _, a := range actions {
+			// convert trace id from base64 to hex, because in ton-trace-task-emulator we use hex
+			// todo: unify trace id format
+			traceIdBytes, err := base64.StdEncoding.DecodeString(a.TraceId)
+			if err != nil {
+				return nil, fmt.Errorf("failed to decode trace id: %w", err)
+			}
+			a.TraceId = hex.EncodeToString(traceIdBytes)
 			row, err := a.GetActionRow()
 			if err != nil {
 				return nil, fmt.Errorf("failed to get action row: %w", err)

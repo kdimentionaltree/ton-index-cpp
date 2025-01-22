@@ -66,7 +66,8 @@ void TraceTaskScheduler::seqno_fetched(std::uint32_t seqno, MasterchainBlockData
     LOG(INFO) << "Fetched seqno " << seqno;
 
     if (seqno > last_fetched_seqno_) {
-        LOG(INFO) << "Setting last fetched seqno to " << seqno;
+        auto time_diff = td::Clocks::system() - mc_data_state.shard_blocks_[0].handle->unix_time();
+        LOG(INFO) << "Setting last fetched seqno to " << seqno << ", created " << td::StringBuilder::FixedDouble(time_diff, 2) << "s ago";
         last_fetched_seqno_ = seqno;
 
         if (!redis_listener_.empty()) {

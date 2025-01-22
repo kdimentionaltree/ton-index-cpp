@@ -5,6 +5,7 @@
 #include "crypto/common/refcnt.hpp"
 #include "validator/interfaces/block.h"
 #include "validator/interfaces/shard.h"
+#include "validator/interfaces/block-handle.h"
 #include "crypto/block/block-auto.h"
 #include "crypto/block/block-parse.h"
 #include "smc-interfaces/InterfacesDetector.h"
@@ -566,6 +567,7 @@ struct GetGemsNftFixPriceSaleData {
 struct BlockDataState {
   td::Ref<ton::validator::BlockData> block_data;
   td::Ref<vm::Cell> block_state;
+  ton::validator::ConstBlockHandle handle;
 };
 
 struct MasterchainBlockDataState {

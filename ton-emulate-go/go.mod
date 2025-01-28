@@ -50,4 +50,4 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-replace github.com/kdimentionaltree/ton-index-go => github.com/verdigos/ton-index-go v0.0.0-20250123004133-848cf9cd14ed
+replace github.com/kdimentionaltree/ton-index-go => github.com/verdigos/ton-index-go v0.0.0-20250128165830-bb9d9e383a5a

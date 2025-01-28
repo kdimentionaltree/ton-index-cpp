@@ -34,7 +34,7 @@ td::Result<block::StdAddress> fetch_msg_dest_address(td::Ref<vm::Cell> msg, int&
     }
 }
 
-void TraceEmulatorImpl::emulate(td::Ref<vm::Cell> in_msg, block::StdAddress address, size_t depth, td::Promise<TraceNode *> promise) {
+void TraceEmulatorImpl::emulate(td::Ref<vm::Cell> in_msg, block::StdAddress address, size_t depth, td::Promise<std::unique_ptr<TraceNode>> promise) {
     {
         std::unique_lock<std::mutex> lock(emulated_accounts_mutex_);
         auto range = emulated_accounts_.equal_range(address);
@@ -92,7 +92,7 @@ td::Result<block::Account> TraceEmulatorImpl::unpack_account(vm::AugmentedDictio
 }
 
 void TraceEmulatorImpl::emulate_transaction(block::Account account, block::StdAddress address,
-                td::Ref<vm::Cell> in_msg, size_t depth, td::Promise<TraceNode *> promise) {
+                td::Ref<vm::Cell> in_msg, size_t depth, td::Promise<std::unique_ptr<TraceNode>> promise) {
     auto emulation_r = emulator_->emulate_transaction(std::move(account), in_msg, 0, 0, block::transaction::Transaction::tr_ord);
     if (emulation_r.is_error()) {
         promise.set_error(emulation_r.move_as_error());
@@ -108,7 +108,7 @@ void TraceEmulatorImpl::emulate_transaction(block::Account account, block::StdAd
 
     auto emulation_success = dynamic_cast<emulator::TransactionEmulator::EmulationSuccess&>(*emulation);
     
-    auto result = new TraceNode();
+    auto result = std::make_unique<TraceNode>();
     result->node_id = in_msg->get_hash().bits();
     result->emulated = true;
     result->address = address;
@@ -142,7 +142,6 @@ void TraceEmulatorImpl::emulate_transaction(block::Account account, block::StdAd
             }
             if (out_msg_address_r.is_error()) {
                 promise.set_error(out_msg_address_r.move_as_error());
-                delete result;
                 return;
             }
             auto out_msg_address = out_msg_address_r.move_as_ok();
@@ -154,12 +153,12 @@ void TraceEmulatorImpl::emulate_transaction(block::Account account, block::StdAd
                 }
             }
 
-            auto P = td::PromiseCreator::lambda([SelfId = actor_id(this), child_ind = pending, result](td::Result<TraceNode *> R) {
+            auto P = td::PromiseCreator::lambda([SelfId = actor_id(this), child_ind = pending, trace_raw = result.get()](td::Result<std::unique_ptr<TraceNode>> R) {
                 if (R.is_error()) {
-                    td::actor::send_closure(SelfId, &TraceEmulatorImpl::child_error, result, R.move_as_error());
+                    td::actor::send_closure(SelfId, &TraceEmulatorImpl::child_error, trace_raw, R.move_as_error());
                     return;
                 }
-                td::actor::send_closure(SelfId, &TraceEmulatorImpl::child_emulated, result, R.move_as_ok(), child_ind);
+                td::actor::send_closure(SelfId, &TraceEmulatorImpl::child_emulated, trace_raw, R.move_as_ok(), child_ind);
             });
             td::actor::send_closure(emulator_actors_[out_msg_address].get(), &TraceEmulatorImpl::emulate, out_msg, out_msg_address, depth - 1, std::move(P));
             pending++;
@@ -170,29 +169,35 @@ void TraceEmulatorImpl::emulate_transaction(block::Account account, block::StdAd
         promise.set_value(std::move(result));
         return;
     }
-    result_promises_[result] = std::move(promise);
+    TraceNode* raw_ptr = result.get();
+    result_promises_[raw_ptr] = { std::move(result), std::move(promise) };
 }
 
-void TraceEmulatorImpl::child_emulated(TraceNode *trace, TraceNode *child, size_t ind) {
-    if (result_promises_.find(trace) == result_promises_.end()) {
+void TraceEmulatorImpl::child_emulated(TraceNode *parent_node_raw, std::unique_ptr<TraceNode> child, size_t ind) {
+    auto it = result_promises_.find(parent_node_raw);
+    if (it == result_promises_.end()) {
         // one of children returned error and parent was already finished
         return;
     }
 
-    trace->children[ind] = std::unique_ptr<TraceNode>(child);
-    for (size_t i = 0; i < trace->children.size(); i++) {
-        if (trace->children[i] == nullptr) {
+    auto& parent_entry = it->second;
+    parent_entry.first->children[ind] = std::move(child);
+
+    for (const auto& child_ptr : parent_entry.first->children) {
+        if (!child_ptr) {
             return;
         }
     }
-    result_promises_[trace].set_result(trace);
-    result_promises_.erase(trace);
+    parent_entry.second.set_value(std::move(parent_entry.first));
+    result_promises_.erase(it);
 }
 
-void TraceEmulatorImpl::child_error(TraceNode *trace, td::Status error) {
-    result_promises_[trace].set_error(std::move(error));
-    result_promises_.erase(trace);
-    delete trace;
+void TraceEmulatorImpl::child_error(TraceNode *parent_node_raw, td::Status error) {
+    auto it = result_promises_.find(parent_node_raw);
+    if (it != result_promises_.end()) {
+        it->second.second.set_error(std::move(error));
+        result_promises_.erase(it);
+    }
 }
 
 TraceEmulator::TraceEmulator(MasterchainBlockDataState mc_data_state, td::Ref<vm::Cell> in_msg, bool ignore_chksig, td::Promise<Trace> promise)
@@ -216,14 +221,14 @@ void TraceEmulator::start_up() {
     TRY_RESULT_PROMISE(promise_, account_addr, fetch_msg_dest_address(in_msg_, type));
     emulator_actors_[account_addr] = td::actor::create_actor<TraceEmulatorImpl>("TraceEmulatorImpl", emulator_, shard_states, emulated_accounts_, emulated_accounts_mutex_, emulator_actors_);
 
-    auto P = td::PromiseCreator::lambda([SelfId = actor_id(this)](td::Result<TraceNode *> R) {
+    auto P = td::PromiseCreator::lambda([SelfId = actor_id(this)](td::Result<std::unique_ptr<TraceNode>> R) {
         td::actor::send_closure(SelfId, &TraceEmulator::finish, std::move(R));
     });
 
     td::actor::send_closure(emulator_actors_[account_addr].get(), &TraceEmulatorImpl::emulate, in_msg_, account_addr, 20, std::move(P));
 }
 
-void TraceEmulator::finish(td::Result<TraceNode *> root) {
+void TraceEmulator::finish(td::Result<std::unique_ptr<TraceNode>> root) {
     if (root.is_error()) {
         promise_.set_error(root.move_as_error());
         stop();
@@ -231,7 +236,7 @@ void TraceEmulator::finish(td::Result<TraceNode *> root) {
     }
     Trace result;
     result.id = in_msg_->get_hash().bits();
-    result.root = std::unique_ptr<TraceNode>(root.move_as_ok());
+    result.root = root.move_as_ok();
     result.rand_seed = rand_seed_;
     result.emulated_accounts = std::move(emulated_accounts_);
     promise_.set_result(std::move(result));

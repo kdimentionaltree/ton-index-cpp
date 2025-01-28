@@ -104,13 +104,12 @@ public:
                 td::actor::send_closure(actor_id(this), &TraceTailEmulator::emulate_tx, child_tx, std::move(P));
             } else {
                 // LOG(INFO) << "Emulating trace for tx " << tx.hash.to_hex() << " msg " << out_msg.hash.to_hex();
-                auto P = td::PromiseCreator::lambda([SelfId = actor_id(this), msg_hash = out_msg.hash, parent_node = trace_node, child_ind, subpromise = ig.get_promise()](td::Result<TraceNode *> R) mutable {
+                auto P = td::PromiseCreator::lambda([SelfId = actor_id(this), msg_hash = out_msg.hash, parent_node = trace_node, child_ind, subpromise = ig.get_promise()](td::Result<std::unique_ptr<TraceNode>> R) mutable {
                     if (R.is_error()) {
                         subpromise.set_error(R.move_as_error());
                         return;
                     }
-                    auto child_trace_node = R.move_as_ok();
-                    parent_node->children[child_ind] = std::unique_ptr<TraceNode>(child_trace_node);
+                    parent_node->children[child_ind] = R.move_as_ok();
                     subpromise.set_value(td::Unit());
                 });
 

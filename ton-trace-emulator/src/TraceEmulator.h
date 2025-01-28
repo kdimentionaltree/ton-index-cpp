@@ -94,7 +94,7 @@ private:
     std::multimap<block::StdAddress, block::Account, AddrCmp>& emulated_accounts_;
     std::mutex& emulated_accounts_mutex_;
     std::unordered_map<block::StdAddress, td::actor::ActorOwn<TraceEmulatorImpl>>& emulator_actors_;
-    std::unordered_map<TraceNode *, td::Promise<TraceNode *>> result_promises_;
+    std::unordered_map<TraceNode *, std::pair<std::unique_ptr<TraceNode>, td::Promise<std::unique_ptr<TraceNode>>>> result_promises_;
 
     uint32_t utime_{0};
 public:
@@ -105,14 +105,14 @@ public:
           emulated_accounts_(emulated_accounts), emulated_accounts_mutex_(emulated_accounts_mutex), emulator_actors_(emulator_actors) {
     }
 
-    void emulate(td::Ref<vm::Cell> in_msg, block::StdAddress address, size_t depth, td::Promise<TraceNode *> promise);
+    void emulate(td::Ref<vm::Cell> in_msg, block::StdAddress address, size_t depth, td::Promise<std::unique_ptr<TraceNode>> promise);
 
 private:
     td::Result<block::Account> unpack_account(vm::AugmentedDictionary& accounts_dict, const block::StdAddress& account_addr, uint32_t utime);
     void emulate_transaction(block::Account account, block::StdAddress address,
-                            td::Ref<vm::Cell> in_msg, size_t depth, td::Promise<TraceNode *> promise);
-    void child_emulated(TraceNode *trace, TraceNode *child, size_t ind);
-    void child_error(TraceNode *trace, td::Status error);
+                            td::Ref<vm::Cell> in_msg, size_t depth, td::Promise<std::unique_ptr<TraceNode>> promise);
+    void child_emulated(TraceNode *parent_node_raw, std::unique_ptr<TraceNode> child, size_t ind);
+    void child_error(TraceNode *parent_node_raw, td::Status error);
 };
 
 // Emulates whole trace, in_msg is external inbound message
@@ -132,6 +132,6 @@ public:
     TraceEmulator(MasterchainBlockDataState mc_data_state, td::Ref<vm::Cell> in_msg, bool ignore_chksig, td::Promise<Trace> promise);
 
     void start_up() override;
-    void finish(td::Result<TraceNode *> root);
+    void finish(td::Result<std::unique_ptr<TraceNode>> root);
 };
 

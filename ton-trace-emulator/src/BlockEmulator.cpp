@@ -62,6 +62,8 @@ public:
         trace_node->node_id = tx.in_msg_hash;
         trace_node->address = tx.account;
 
+        std::weak_ptr<TraceNode> trace_node_weak = trace_node;
+
         td::MultiPromise mp;
         auto ig = mp.init_guard();
         ig.add_promise([SelfId = actor_id(this), trace_node, promise = std::move(promise)](td::Result<td::Unit> R) mutable {
@@ -87,32 +89,29 @@ public:
             }
             auto destination = destination_r.move_as_ok();
 
+            auto P = td::PromiseCreator::lambda([SelfId = actor_id(this), msg_hash = out_msg.hash, parent_node_weak = trace_node_weak, child_ind, subpromise = ig.get_promise()](td::Result<std::unique_ptr<TraceNode>> R) mutable {
+                if (R.is_error()) {
+                    subpromise.set_error(R.move_as_error());
+                    return;
+                }
+                auto parent_node = parent_node_weak.lock();
+                if (!parent_node) {
+                    subpromise.set_error(td::Status::Error("Parent node is already destroyed"));
+                    return;
+                }
+                parent_node->children[child_ind] = std::unique_ptr<TraceNode>(R.move_as_ok());
+                subpromise.set_value(td::Unit());
+            });
+
             if (tx_by_in_msg_hash_.find(out_msg.hash) != tx_by_in_msg_hash_.end()) {
                 TransactionInfo& child_tx = tx_by_in_msg_hash_.at(out_msg.hash);
                 if (!child_tx.initial_msg_hash) {
                     LOG(WARNING) << "No initial_msg_hash for child tx " << child_tx.hash.to_hex();
                     child_tx.initial_msg_hash = tx.initial_msg_hash;
                 }
-                auto P = td::PromiseCreator::lambda([SelfId = actor_id(this), msg_hash = out_msg.hash, parent_node = trace_node, child_ind, subpromise = ig.get_promise()](td::Result<std::unique_ptr<TraceNode>> R) mutable {
-                    if (R.is_error()) {
-                        subpromise.set_error(R.move_as_error());
-                        return;
-                    }
-                    parent_node->children[child_ind] = std::unique_ptr<TraceNode>(R.move_as_ok());
-                    subpromise.set_value(td::Unit());
-                });
+                
                 td::actor::send_closure(actor_id(this), &TraceTailEmulator::emulate_tx, child_tx, std::move(P));
             } else {
-                // LOG(INFO) << "Emulating trace for tx " << tx.hash.to_hex() << " msg " << out_msg.hash.to_hex();
-                auto P = td::PromiseCreator::lambda([SelfId = actor_id(this), msg_hash = out_msg.hash, parent_node = trace_node, child_ind, subpromise = ig.get_promise()](td::Result<std::unique_ptr<TraceNode>> R) mutable {
-                    if (R.is_error()) {
-                        subpromise.set_error(R.move_as_error());
-                        return;
-                    }
-                    parent_node->children[child_ind] = R.move_as_ok();
-                    subpromise.set_value(td::Unit());
-                });
-
                 {
                     std::lock_guard<std::mutex> lock(emulated_accounts_mutex_);
                     if (emulator_actors_.find(destination) == emulator_actors_.end()) {

@@ -44,6 +44,7 @@ public:
     void trace_error(td::Status error) {
         LOG(ERROR) << "Failed to emulate trace: " << error;
         promise_.set_error(std::move(error));
+        stop();
     }
 
     void trace_root_received(std::unique_ptr<TraceNode> trace_root) {
@@ -53,6 +54,7 @@ public:
         trace.id = tx_.initial_msg_hash.value();
         trace.emulated_accounts = std::move(emulated_accounts_);
         promise_.set_value(std::move(trace));
+        stop();
     }
 
     void emulate_tx(TransactionInfo tx, td::Promise<std::unique_ptr<TraceNode>> promise) {        
@@ -306,12 +308,6 @@ void McBlockEmulator::process_txs() {
     }
 
     emulate_traces();
-}
-
-void McBlockEmulator::db_error(td::Status error) {
-    LOG(ERROR) << "Failed to lookup trace_ids: " << error;
-    promise_.set_error(std::move(error));
-    stop();
 }
 
 void McBlockEmulator::emulate_traces() {

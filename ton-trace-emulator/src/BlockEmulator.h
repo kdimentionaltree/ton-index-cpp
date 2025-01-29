@@ -48,7 +48,6 @@ private:
     void parse_error(ton::BlockId blkid, td::Status error);
     void block_parsed(ton::BlockId blkid, std::vector<TransactionInfo> txs);
     void process_txs();
-    void db_error(td::Status error);
     void emulate_traces();
     void trace_error(td::Bits256 tx_hash, TraceId trace_id, td::Status error);
     void trace_received(td::Bits256 tx_hash, Trace trace);

@@ -29,6 +29,7 @@ public:
         emulator_ = std::make_shared<emulator::TransactionEmulator>(mc_data_state_.config_, 0);
         auto libraries_root = mc_data_state_.config_->get_libraries_root();
         emulator_->set_libs(vm::Dictionary(libraries_root, 256));
+        emulator_->set_unixtime(td::Timestamp::now().at_unix());
 
         auto P = td::PromiseCreator::lambda([SelfId = actor_id(this)](td::Result<std::unique_ptr<TraceNode>> R) mutable {
             if (R.is_error()) {
@@ -239,9 +240,6 @@ public:
 McBlockEmulator::McBlockEmulator(MasterchainBlockDataState mc_data_state, std::function<void(Trace, td::Promise<td::Unit>)> trace_processor, td::Promise<> promise)
         : mc_data_state_(std::move(mc_data_state)), trace_processor_(std::move(trace_processor)), promise_(std::move(promise)), 
           blocks_left_to_parse_(mc_data_state_.shard_blocks_diff_.size()) {
-    auto libraries_root = mc_data_state_.config_->get_libraries_root();
-    emulator_ = std::make_shared<emulator::TransactionEmulator>(mc_data_state_.config_, 0);
-    emulator_->set_libs(vm::Dictionary(libraries_root, 256));
 }
 
 void McBlockEmulator::start_up() {

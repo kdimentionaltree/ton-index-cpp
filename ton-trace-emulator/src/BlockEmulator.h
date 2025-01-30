@@ -30,7 +30,6 @@ private:
     size_t blocks_left_to_parse_;
     std::vector<TransactionInfo> txs_;
 
-    std::shared_ptr<emulator::TransactionEmulator> emulator_;
     std::vector<td::Ref<vm::Cell>> shard_states_;
 
     std::unordered_map<td::Bits256, TransactionInfo> tx_by_in_msg_hash_;

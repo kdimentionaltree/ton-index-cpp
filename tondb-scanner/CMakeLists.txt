@@ -7,7 +7,6 @@ add_library(tondb-scanner STATIC
     src/DataParser.cpp
     src/TraceAssembler.cpp
     src/EventProcessor.cpp
-    # src/EventProcessor2.cpp
     src/queue_state.cpp
     src/parse_token_data.cpp
     src/convert-utils.cpp
@@ -30,9 +29,7 @@ target_link_directories(tondb-scanner
     PUBLIC external/msgpack-c
 )
 target_compile_features(tondb-scanner PRIVATE cxx_std_17)
-target_link_libraries(tondb-scanner overlay tdutils tdactor adnl tl_api dht
-        catchain validatorsession validator-disk ton_validator validator-disk smc-envelope
-        pqxx msgpack-cxx)
+target_link_libraries(tondb-scanner PUBLIC validator-disk ton_validator tddb smc-envelope msgpack-cxx)
 
 set(TLB_TOKENS
   ${CMAKE_CURRENT_SOURCE_DIR}/src/tokens.cpp

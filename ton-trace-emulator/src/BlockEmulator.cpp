@@ -78,7 +78,7 @@ public:
         });
 
         int child_ind = 0;
-        for (const auto out_msg : tx.out_msgs) {
+        for (const auto& out_msg : tx.out_msgs) {
             // LOG(INFO) << "tx: " << tx.hash.to_hex() << " creating trace for msg " << out_msg.hash.to_hex();
             int type;
             auto destination_r = fetch_msg_dest_address(out_msg.root, type);
@@ -96,13 +96,7 @@ public:
                     subpromise.set_error(R.move_as_error());
                     return;
                 }
-                auto parent_node = parent_node_weak.lock();
-                if (!parent_node) {
-                    subpromise.set_error(td::Status::Error("Parent node is already destroyed"));
-                    return;
-                }
-                parent_node->children[child_ind] = std::unique_ptr<TraceNode>(R.move_as_ok());
-                subpromise.set_value(td::Unit());
+                td::actor::send_closure(SelfId, &TraceTailEmulator::child_node_emulated, parent_node_weak, R.move_as_ok(), child_ind, std::move(subpromise));
             });
 
             if (tx_by_in_msg_hash_.find(out_msg.hash) != tx_by_in_msg_hash_.end()) {
@@ -125,6 +119,15 @@ public:
             child_ind++;
         }
         trace_node->children.resize(child_ind);
+    }
+
+    void child_node_emulated(std::weak_ptr<TraceNode> parent_node_weak, std::unique_ptr<TraceNode> child, size_t ind, td::Promise<> promise) {
+        auto parent_node = parent_node_weak.lock();
+        if (!parent_node) {
+            return;
+        }
+        parent_node->children[ind] = std::move(child);
+        promise.set_result(td::Unit());
     }
 };
 

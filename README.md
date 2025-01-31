@@ -25,18 +25,18 @@ Do the following steps to build and run index worker from source.
 
 1. Install required packages: 
 
-        sudo apt-get update -y
-        sudo apt-get install -y build-essential cmake clang openssl libssl-dev zlib1g-dev gperf wget git curl libreadline-dev ccache libmicrohttpd-dev pkg-config libsecp256k1-dev libsodium-dev python3-dev libpq-dev ninja-build
+        sudo apt update -y
+        sudo apt install -y build-essential cmake clang openssl libssl-dev zlib1g-dev gperf wget git curl libreadline-dev ccache libmicrohttpd-dev liblz4-dev pkg-config libsecp256k1-dev libsodium-dev python3-dev libpq-dev ninja-build
 2. Build TON index worker binary:
 
         mkdir -p build
         cd build
-        cmake -DCMAKE_BUILD_TYPE=Release -GNinja ..
+        cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=off -GNinja ..
         ninja -j$(nproc) ton-index-postgres-v2
 
 3. Install binary to your system:
 
-        sudo cmake --install 
+        sudo cmake --install ./ton-index-postgres-v2/
 
 4. Increase maximum opened files limit: 
 

@@ -42,6 +42,9 @@ public:
             if (account_state.code.is_null()) {
                 continue;
             }
+            //Detector -- это InterfacesDetector из списка детекторов
+            // в акторе вызывается InterfacesDetector.start_up() который проходит по всем детекторам, пробует его применить к текущему аккаунту и если успех, то записывает в лист найденных интерфейсов
+            // vector<typename Detector::DetectedInterface> -- это уже реально найденые интерфейсы
             td::actor::create_actor<Detector>("InterfacesDetector", account_state.account, account_state.code, account_state.data, shard_states, block_->mc_block_.config_, 
                 td::PromiseCreator::lambda([SelfId = actor_id(this), account_state, promise = ig.get_promise()](std::vector<typename Detector::DetectedInterface> interfaces) mutable {
                     td::actor::send_closure(SelfId, &BlockInterfaceProcessor::process_address_interfaces, account_state.account, std::move(interfaces), 

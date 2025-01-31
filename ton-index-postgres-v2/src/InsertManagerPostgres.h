@@ -69,6 +69,8 @@ private:
   std::string insert_latest_account_states(pqxx::work &txn);
   void insert_jetton_transfers(pqxx::work &txn, bool with_copy);
   void insert_jetton_burns(pqxx::work &txn, bool with_copy);
+  void insert_jetton_mints(pqxx::work &txn, bool with_copy);
+  void insert_jetton_latest_state(pqxx::work &txn, bool with_copy);
   void insert_nft_transfers(pqxx::work &txn, bool with_copy);
   std::string insert_jetton_masters(pqxx::work &txn);
   std::string insert_jetton_wallets(pqxx::work &txn);

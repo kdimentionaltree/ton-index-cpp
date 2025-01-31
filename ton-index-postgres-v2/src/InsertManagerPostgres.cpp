@@ -401,8 +401,12 @@ void InsertBatchPostgres::alarm() {
     insert_transactions(txn, with_copy_);
     insert_messages(txn, with_copy_);
     insert_account_states(txn, with_copy_);
+
     insert_jetton_transfers(txn, with_copy_);
     insert_jetton_burns(txn, with_copy_);
+    insert_jetton_mints(txn, with_copy_);
+    insert_jetton_latest_state(txn, with_copy_);
+
     insert_nft_transfers(txn, with_copy_);
     insert_traces(txn, with_copy_);
     std::string insert_under_mutex_query;
@@ -1396,6 +1400,80 @@ void InsertBatchPostgres::insert_jetton_burns(pqxx::work &txn, bool with_copy) {
   stream.finish();
 }
 
+void InsertBatchPostgres::insert_jetton_mints(pqxx::work &txn, bool with_copy) {
+    std::initializer_list<std::string_view> columns = {
+            "tx_hash", "tx_lt", "tx_now", "tx_aborted", "query_id", "amount", "owner", "jetton_wallet_address", "jetton_master_address",
+            "response_destination", "forward_ton_amount", "forward_payload", "trace_id"
+    };
+    PopulateTableStream stream(txn, "jetton_mints", columns, 1000, with_copy);
+    if (!with_copy) {
+        stream.setConflictDoNothing();
+    }
+
+    for (const auto& task : insert_tasks_) {
+        for (const auto& mint : task.parsed_block_->get_events<JettonMint>()) {
+            auto forward_payload_boc_r = convert::to_bytes(mint.forward_payload);
+            auto forward_payload_boc = forward_payload_boc_r.is_ok() ? forward_payload_boc_r.move_as_ok() : std::nullopt;
+
+            auto tuple = std::make_tuple(
+                    mint.transaction_hash,
+                    mint.transaction_lt,
+                    mint.transaction_now,
+                    mint.transaction_aborted,
+                    mint.query_id,
+                    mint.amount,
+                    mint.owner,
+                    mint.jetton_wallet,
+                    mint.jetton_master,
+                    mint.response_destination,
+                    mint.forward_ton_amount,
+                    forward_payload_boc,
+                    mint.trace_id
+            );
+
+            stream.insert_row(std::move(tuple));
+        }
+    }
+    stream.finish();
+}
+
+template <class T>
+std::pair<uint32_t, uint64_t> get_greatest(std::pair<uint32_t, uint64_t> current, std::vector<T> events) {
+    for (const auto& e : events) {
+        if (e.transaction_now > current.first ||
+                (e.transaction_now == current.first && e.transaction_lt > current.second))
+        {
+            current = std::make_pair(e.transaction_now, e.transaction_lt);
+        }
+    }
+    return current;
+}
+
+void InsertBatchPostgres::insert_jetton_latest_state(pqxx::work &txn, bool with_copy) {
+    std::initializer_list<std::string_view> columns = {
+            "state_name", "tx_lt", "tx_now"
+    };
+    PopulateTableStream stream(txn, "last_known_state", columns, 1000, false);
+    stream.setConflictDoUpdate({"state_name"},
+                               "last_known_state.tx_now < EXCLUDED.tx_now OR (last_known_state.tx_now = EXCLUDED.tx_now AND last_known_state.tx_lt < EXCLUDED.tx_lt)");
+
+    std::pair<uint32_t, uint64_t> latest_tx = std::make_pair(0, 0);
+    for (const auto& task : insert_tasks_) {
+        latest_tx = get_greatest(latest_tx, task.parsed_block_->get_events<JettonMint>());
+        latest_tx = get_greatest(latest_tx, task.parsed_block_->get_events<JettonBurn>());
+        latest_tx = get_greatest(latest_tx, task.parsed_block_->get_events<JettonTransfer>());
+    }
+
+    stream.insert_row(
+        std::make_tuple(
+            "jetton_events",
+            latest_tx.second,
+            latest_tx.first
+        )
+    );
+    stream.finish();
+}
+
 void InsertBatchPostgres::insert_nft_transfers(pqxx::work &txn, bool with_copy) {
   std::initializer_list<std::string_view> columns = {
     "tx_hash", "tx_lt", "tx_now", "tx_aborted", "query_id", "nft_item_address", "nft_item_index", "nft_collection_address",
@@ -1843,7 +1921,33 @@ void InsertManagerPostgres::start_up() {
       "foreign key (tx_hash, tx_lt) references transactions);\n"
     );
 
-    query += (
+      query += (
+              "create table if not exists jetton_mints ( "
+              "tx_hash tonhash not null, "
+              "tx_lt bigint not null, "
+              "tx_now integer not null, "
+              "tx_aborted boolean not null, "
+              "query_id numeric, "
+              "amount numeric, "
+              "owner tonaddr, "
+              "jetton_wallet_address tonaddr, "
+              "jetton_master_address tonaddr, "
+              "response_destination tonaddr, "
+              "forward_ton_amount numeric, "
+              "forward_payload text, "
+              "trace_id tonhash, "
+              "primary key (tx_hash, tx_lt), "
+              "foreign key (tx_hash, tx_lt) references transactions);\n"
+      );
+
+      query += (
+              "create table if not exists last_known_state ( "
+              "state_name varchar(30) not null primary key, "
+              "tx_lt bigint not null, "
+              "tx_now integer not null);\n"
+      );
+
+      query += (
       "create table if not exists jetton_transfers ("
       "tx_hash tonhash not null, "
       "tx_lt bigint not null, "
@@ -2060,6 +2164,7 @@ void InsertManagerPostgres::start_up() {
         "create index if not exists jetton_transfers_index_8 on jetton_transfers (jetton_master_address, tx_lt asc);\n"
         "create index if not exists jetton_transfers_index_9 on jetton_transfers (tx_now asc, tx_lt asc);\n"
         "create index if not exists jetton_transfers_index_10 on jetton_transfers (tx_lt asc);\n"
+
         "create index if not exists jetton_burns_index_1 on jetton_burns (owner, tx_now asc, tx_lt asc);\n"
         "create index if not exists jetton_burns_index_2 on jetton_burns (owner, tx_lt asc);\n"
         "create index if not exists jetton_burns_index_3 on jetton_burns (jetton_wallet_address, tx_now asc, tx_lt asc);\n"
@@ -2068,6 +2173,16 @@ void InsertManagerPostgres::start_up() {
         "create index if not exists jetton_burns_index_6 on jetton_burns (jetton_master_address, tx_lt asc);\n"
         "create index if not exists jetton_burns_index_7 on jetton_burns (tx_now asc, tx_lt asc);\n"
         "create index if not exists jetton_burns_index_8 on jetton_burns (tx_lt asc);\n"
+
+        "create index if not exists jetton_mints_index_1 on jetton_mints (owner, tx_now asc, tx_lt asc);\n"
+        "create index if not exists jetton_mints_index_2 on jetton_mints (owner, tx_lt asc);\n"
+        "create index if not exists jetton_mints_index_3 on jetton_mints (jetton_wallet_address, tx_now asc, tx_lt asc);\n"
+        "create index if not exists jetton_mints_index_4 on jetton_mints (jetton_wallet_address, tx_lt asc);\n"
+        "create index if not exists jetton_mints_index_5 on jetton_mints (jetton_master_address, tx_now asc, tx_lt asc);\n"
+        "create index if not exists jetton_mints_index_6 on jetton_mints (jetton_master_address, tx_lt asc);\n"
+        "create index if not exists jetton_mints_index_7 on jetton_mints (tx_now asc, tx_lt asc);\n"
+        "create index if not exists jetton_mints_index_8 on jetton_mints (tx_lt asc);\n"
+
         "create index if not exists nft_collections_index_1 on nft_collections (owner_address, id asc);\n"
         "create index if not exists nft_collections_index_2 on nft_collections (id asc);\n"
         "create index if not exists nft_items_index_1 on nft_items (collection_address, index asc);\n"
@@ -2104,34 +2219,34 @@ void InsertManagerPostgres::start_up() {
   }
 
   // some migrations
-  LOG(INFO) << "Running some migrations...";
-  try {
-    pqxx::connection c(credential_.get_connection_string());
-    pqxx::work txn(c);
-
-    std::string query = "";
-    
-    query += (
-      "alter table jetton_wallets add column if not exists mintless_is_claimed boolean;\n"
-      "alter table jetton_wallets add column if not exists mintless_amount numeric;\n"
-      "alter table jetton_wallets add column if not exists mintless_start_from bigint;\n"
-      "alter table jetton_wallets add column if not exists mintless_expire_at bigint;\n"
-      "alter table mintless_jetton_masters add column if not exists custom_payload_api_uri varchar[];\n"
-
-      "alter table transactions add column if not exists total_fees_extra_currencies jsonb;\n"
-      "alter table transactions add column if not exists credit_extra_currencies jsonb;\n"
-      "alter table messages add column if not exists value_extra_currencies jsonb;\n"
-      "alter table account_states add column if not exists balance_extra_currencies jsonb;\n"
-      "alter table latest_account_states add column if not exists balance_extra_currencies jsonb;\n"
-    );
-
-    LOG(DEBUG) << query;
-    txn.exec0(query);
-    txn.commit();
-  } catch (const std::exception &e) {
-    LOG(ERROR) << "Error while running some migrations in database: " << e.what();
-    std::_Exit(1);
-  }
+//  LOG(INFO) << "Running some migrations...";
+//  try {
+//    pqxx::connection c(credential_.get_connection_string());
+//    pqxx::work txn(c);
+//
+//    std::string query = "";
+//
+//    query += (
+//      "alter table jetton_wallets add column if not exists mintless_is_claimed boolean;\n"
+//      "alter table jetton_wallets add column if not exists mintless_amount numeric;\n"
+//      "alter table jetton_wallets add column if not exists mintless_start_from bigint;\n"
+//      "alter table jetton_wallets add column if not exists mintless_expire_at bigint;\n"
+//      "alter table mintless_jetton_masters add column if not exists custom_payload_api_uri varchar[];\n"
+//
+//      "alter table transactions add column if not exists total_fees_extra_currencies jsonb;\n"
+//      "alter table transactions add column if not exists credit_extra_currencies jsonb;\n"
+//      "alter table messages add column if not exists value_extra_currencies jsonb;\n"
+//      "alter table account_states add column if not exists balance_extra_currencies jsonb;\n"
+//      "alter table latest_account_states add column if not exists balance_extra_currencies jsonb;\n"
+//    );
+//
+//    LOG(DEBUG) << query;
+//    txn.exec0(query);
+//    txn.commit();
+//  } catch (const std::exception &e) {
+//    LOG(ERROR) << "Error while running some migrations in database: " << e.what();
+//    std::_Exit(1);
+//  }
 
   // if success
   alarm_timestamp() = td::Timestamp::in(1.0);

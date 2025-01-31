@@ -439,6 +439,25 @@ struct JettonBurn {
   td::Ref<vm::Cell> custom_payload;
 };
 
+// согласно https://github.com/ton-blockchain/TEPs/blob/master/text/0074-jettons-standard.md
+// это Unspecified by standard, but suggested format of internal message
+// only when from == sender
+struct JettonMint {
+    td::Bits256 trace_id;
+    td::Bits256 transaction_hash;
+    uint64_t transaction_lt;
+    uint32_t transaction_now;
+    bool transaction_aborted;
+    uint64_t query_id;
+    td::RefInt256 amount;
+    std::string owner; // jetton wallet owner
+    std::string jetton_wallet;
+    std::string jetton_master;
+    std::string response_destination;
+    td::RefInt256 forward_ton_amount;
+    td::Ref<vm::Cell> forward_payload;
+};
+
 struct NFTCollectionData {
   std::string address;
   td::RefInt256 next_item_index;
@@ -577,6 +596,7 @@ struct MasterchainBlockDataState {
 
 using BlockchainEvent = std::variant<JettonTransfer, 
                                      JettonBurn,
+                                     JettonMint,
                                      NFTTransfer>;
 
 using BlockchainInterface = std::variant<JettonMasterData, 

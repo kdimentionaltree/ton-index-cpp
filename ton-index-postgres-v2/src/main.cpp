@@ -14,8 +14,30 @@
 #include "EventProcessor.h"
 #include "IndexScheduler.h"
 
+//bool unpack(vm::CellSlice& cs, tokens::gen::InternalMsgBody::Record_internal_transfer& data)  {
+//    return cs.fetch_ulong(32) == 0x178d4519
+//           && cs.fetch_uint_to(64, data.query_id)
+//           && tokens::gen::t_VarUInteger_16.fetch_to(cs, data.amount)
+//           && tokens::gen::t_MsgAddress.fetch_to(cs, data.from)
+//           && tokens::gen::t_MsgAddress.fetch_to(cs, data.response_address)
+//           && tokens::gen::t_VarUInteger_16.fetch_to(cs, data.forward_ton_amount)
+//           && tokens::gen::t_Either_Cell_Ref_Cell.fetch_to(cs, data.forward_payload);
+//}
 
 int main(int argc, char *argv[]) {
+//    auto code_cell = vm::std_boc_deserialize(td::base64_decode(td::Slice(
+//            "te6cckEBAQEAOwAAcReNRRkAAAAAAAAAAHI4byb8EAACAETQDWPKxAbAUYAYnzDRgrHEcus2p2K9hmMlnmbzxXfimHoSAhndyTA="))
+//                                                     .move_as_ok()).move_as_ok();
+//    vm::CellSlice cs = vm::CellSlice(vm::NoVm{}, code_cell);
+//    int res = tokens::gen::t_InternalMsgBody.check_tag(cs);
+//    std::cout << res << std::endl;
+//  unsigned long long a = 0x978d4519U;
+//  unsigned long long b = 0x7fffffff;
+//  std::cout << (a & b) << " " << (0x978d4519U & 0x7fffffff) << std::endl;
+//    tokens::gen::InternalMsgBody::Record_internal_transfer data;
+//    unpack(cs, data);
+//    LOG(ERROR) << "data: " << block::tlb::t_VarUInteger_16.as_integer(data.amount).get();
+
   SET_VERBOSITY_LEVEL(verbosity_INFO);
   td::set_default_failure_signal_handler().ensure();
 

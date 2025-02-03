@@ -48,7 +48,7 @@ else
     mkdir -p build
     cmake -DCMAKE_BUILD_TYPE=Release -DBUILD_SHARED_LIBS=off -GNinja -S . -B ./build
     ninja -C ./build -j$(nproc) ton-index-postgres-v2
-    sudo cmake --install build/
+    sudo cmake --install ./build/ton-index-postgres-v2
 fi
 
 # setup daemon
